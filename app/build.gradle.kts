@@ -15,8 +15,8 @@ android {
         applicationId = "com.example.expressivebox"
         minSdk = 24
         targetSdk = 34
-        versionCode = 49
-        versionName = "1.0.49"
+        versionCode = 51
+        versionName = "1.0.51"
         ndk {
             abiFilters += "arm64-v8a"
         }

@@ -1449,6 +1449,14 @@ fun ConnectionDashboard(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier.size(180.dp)
             ) {
+                // Custom Canvas-based WaveVisualizer (animates smoothly when connected)
+                WaveVisualizer(
+                    state = state,
+                    primaryColor = MaterialTheme.colorScheme.primary,
+                    secondaryColor = MaterialTheme.colorScheme.secondary,
+                    modifier = Modifier.size(180.dp)
+                )
+
                 // Native Material 3 Expressive Loading and Wavy Progress Indicators
                 if (state == "CONNECTED") {
                     CircularWavyProgressIndicator(
@@ -1740,6 +1748,99 @@ fun deserializeSubscriptions(data: String): List<Subscription> {
         }
     }
 }
+
+@Composable
+fun WaveVisualizer(
+    state: String,
+    primaryColor: Color,
+    secondaryColor: Color,
+    modifier: Modifier = Modifier
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "wave")
+    
+    val phase1 by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 2f * Math.PI.toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(4500, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "phase1"
+    )
+    val phase2 by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = -2f * Math.PI.toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(6500, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "phase2"
+    )
+    
+    val amplitudeMultiplier by animateFloatAsState(
+        targetValue = if (state == "CONNECTED") 1f else 0f,
+        animationSpec = tween(1200),
+        label = "amplitude"
+    )
+    
+    Canvas(modifier = modifier) {
+        val width = size.width
+        val height = size.height
+        val centerX = width / 2f
+        val centerY = height / 2f
+        
+        if (amplitudeMultiplier > 0.01f) {
+            val baseRadius = minOf(width, height) / 2f * 0.70f
+            
+            // Draw Wave 1 (outer primary color wave)
+            val path1 = Path()
+            val points1 = 120
+            val step1 = (2f * Math.PI / points1).toFloat()
+            for (i in 0..points1) {
+                val angle = i * step1
+                val wave = sin(angle * 6f + phase1) * 8.dp.toPx() * amplitudeMultiplier
+                val r = baseRadius + wave
+                val x = centerX + r * cos(angle)
+                val y = centerY + r * sin(angle)
+                if (i == 0) {
+                    path1.moveTo(x, y)
+                } else {
+                    path1.lineTo(x, y)
+                }
+            }
+            path1.close()
+            drawPath(
+                path = path1,
+                color = primaryColor.copy(alpha = 0.35f),
+                style = Stroke(width = 3.dp.toPx())
+            )
+            
+            // Draw Wave 2 (inner secondary color wave)
+            val path2 = Path()
+            val points2 = 120
+            val step2 = (2f * Math.PI / points2).toFloat()
+            for (i in 0..points2) {
+                val angle = i * step2
+                val wave = sin(angle * 8f + phase2) * 5.dp.toPx() * amplitudeMultiplier
+                val r = (baseRadius - 10.dp.toPx()) + wave
+                val x = centerX + r * cos(angle)
+                val y = centerY + r * sin(angle)
+                if (i == 0) {
+                    path2.moveTo(x, y)
+                } else {
+                    path2.lineTo(x, y)
+                }
+            }
+            path2.close()
+            drawPath(
+                path = path2,
+                color = secondaryColor.copy(alpha = 0.25f),
+                style = Stroke(width = 2.dp.toPx())
+            )
+        }
+    }
+}
+
 
 
 
