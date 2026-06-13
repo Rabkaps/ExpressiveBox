@@ -53,6 +53,8 @@ import com.hambalapps.expressivebox.ui.qr.QrScannerScreen
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.CircularWavyProgressIndicator
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
@@ -82,9 +84,21 @@ fun MainScreen(
     val splitTunnelingEnabled by settingsManager.splitTunnelingEnabled.collectAsStateWithLifecycle(initialValue = false)
     val splitTunnelingApps by settingsManager.splitTunnelingApps.collectAsStateWithLifecycle(initialValue = emptySet())
     val splitTunnelingMode by settingsManager.splitTunnelingMode.collectAsStateWithLifecycle(initialValue = "bypass")
+    val manualServersStr by settingsManager.manualServers.collectAsStateWithLifecycle(initialValue = "")
 
-    val subscriptions = remember(subscriptionListStr) {
-        deserializeSubscriptions(subscriptionListStr)
+    val subscriptions = remember(subscriptionListStr, manualServersStr) {
+        val list = deserializeSubscriptions(subscriptionListStr).toMutableList()
+        if (manualServersStr.isNotEmpty()) {
+            list.add(
+                Subscription(
+                    id = "manual",
+                    name = "Manual / Custom Configs",
+                    url = "local://manual",
+                    servers = manualServersStr
+                )
+            )
+        }
+        list
     }
     val activeSubscription = remember(subscriptions, activeSubId) {
         subscriptions.find { it.id == activeSubId } ?: subscriptions.firstOrNull()
@@ -1542,13 +1556,13 @@ fun MainScreen(
                                         .fillMaxWidth()
                                         .heightIn(max = 280.dp)
                                 ) {
-                                    Column(
+                                    LazyColumn(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .verticalScroll(rememberScrollState())
-                                            .padding(6.dp)
+                                            .padding(6.dp),
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
                                     ) {
-                                        filteredServerList.forEachIndexed { index, serverLink ->
+                                        itemsIndexed(filteredServerList, key = { _, link -> link }) { index, serverLink ->
                                             val isSelected = activeProfile == serverLink
                                             val name = getProxyName(serverLink)
                                             val type = serverLink.substringBefore("://").uppercase()
@@ -1687,6 +1701,32 @@ fun MainScreen(
                                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                                             )
                                                         }
+                                                    }
+                                                }
+                                                if (activeSubId == "manual") {
+                                                    IconButton(
+                                                        onClick = {
+                                                            scope.launch {
+                                                                val updatedManualList = serverList.filter { it != serverLink }
+                                                                val updatedManualStr = updatedManualList.joinToString("\n")
+                                                                settingsManager.setManualServers(updatedManualStr)
+                                                                if (isSelected) {
+                                                                    val nextActive = updatedManualList.firstOrNull() ?: ""
+                                                                    settingsManager.setActiveProfile(nextActive)
+                                                                    if (vpnState == "CONNECTED" && nextActive.isNotEmpty()) {
+                                                                        startVpnService(context)
+                                                                    }
+                                                                }
+                                                            }
+                                                        },
+                                                        modifier = Modifier.size(36.dp)
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.Delete,
+                                                            contentDescription = "Delete Manual Node",
+                                                            tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
+                                                            modifier = Modifier.size(18.dp)
+                                                        )
                                                     }
                                                 }
                                             }
@@ -1850,7 +1890,14 @@ fun MainScreen(
                 Button(
                     onClick = {
                         scope.launch {
-                            settingsManager.setActiveProfile(importText)
+                            val currentManual = manualServersStr
+                            val trimmedImport = importText.trim()
+                            if (trimmedImport.isNotEmpty()) {
+                                val updatedManual = if (currentManual.isEmpty()) trimmedImport else "$currentManual\n$trimmedImport"
+                                settingsManager.setManualServers(updatedManual)
+                                settingsManager.setActiveSubId("manual")
+                                settingsManager.setActiveProfile(trimmedImport)
+                            }
                             showImportDialog = false
                             importText = ""
                             if (vpnState == "CONNECTED") {
