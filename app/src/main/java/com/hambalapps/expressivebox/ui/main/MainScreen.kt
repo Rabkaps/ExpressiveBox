@@ -114,6 +114,8 @@ fun MainScreen(
     var importText by remember { mutableStateOf("") }
     var showLogs by remember { mutableStateOf(false) }
     var scanResultCallback by remember { mutableStateOf<((String) -> Unit)?>(null) }
+    var editingNodeLink by remember { mutableStateOf<String?>(null) }
+    var editLinkInput by remember { mutableStateOf("") }
 
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
 
@@ -1703,30 +1705,72 @@ fun MainScreen(
                                                         }
                                                     }
                                                 }
-                                                if (activeSubId == "manual") {
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                                ) {
+                                                    // Share configuration link
                                                     IconButton(
                                                         onClick = {
-                                                            scope.launch {
-                                                                val updatedManualList = serverList.filter { it != serverLink }
-                                                                val updatedManualStr = updatedManualList.joinToString("\n")
-                                                                settingsManager.setManualServers(updatedManualStr)
-                                                                if (isSelected) {
-                                                                    val nextActive = updatedManualList.firstOrNull() ?: ""
-                                                                    settingsManager.setActiveProfile(nextActive)
-                                                                    if (vpnState == "CONNECTED" && nextActive.isNotEmpty()) {
-                                                                        startVpnService(context)
-                                                                    }
-                                                                }
+                                                            val sendIntent = Intent().apply {
+                                                                action = Intent.ACTION_SEND
+                                                                putExtra(Intent.EXTRA_TEXT, serverLink)
+                                                                this.type = "text/plain"
                                                             }
+                                                            val shareIntent = Intent.createChooser(sendIntent, "Share Node Config")
+                                                            context.startActivity(shareIntent)
                                                         },
                                                         modifier = Modifier.size(36.dp)
                                                     ) {
                                                         Icon(
-                                                            imageVector = Icons.Default.Delete,
-                                                            contentDescription = "Delete Manual Node",
-                                                            tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
+                                                            imageVector = Icons.Default.Share,
+                                                            contentDescription = "Share Node Config",
+                                                            tint = MaterialTheme.colorScheme.primary,
                                                             modifier = Modifier.size(18.dp)
                                                         )
+                                                    }
+
+                                                    // Edit/Delete options for manual nodes
+                                                    if (activeSubId == "manual") {
+                                                        IconButton(
+                                                            onClick = {
+                                                                editingNodeLink = serverLink
+                                                                editLinkInput = serverLink
+                                                            },
+                                                            modifier = Modifier.size(36.dp)
+                                                        ) {
+                                                            Icon(
+                                                                imageVector = Icons.Default.Edit,
+                                                                contentDescription = "Edit Node Config",
+                                                                tint = MaterialTheme.colorScheme.primary,
+                                                                modifier = Modifier.size(18.dp)
+                                                            )
+                                                        }
+
+                                                        IconButton(
+                                                            onClick = {
+                                                                scope.launch {
+                                                                    val updatedManualList = serverList.filter { it != serverLink }
+                                                                    val updatedManualStr = updatedManualList.joinToString("\n")
+                                                                    settingsManager.setManualServers(updatedManualStr)
+                                                                    if (isSelected) {
+                                                                        val nextActive = updatedManualList.firstOrNull() ?: ""
+                                                                        settingsManager.setActiveProfile(nextActive)
+                                                                        if (vpnState == "CONNECTED" && nextActive.isNotEmpty()) {
+                                                                            startVpnService(context)
+                                                                        }
+                                                                    }
+                                                                }
+                                                            },
+                                                            modifier = Modifier.size(36.dp)
+                                                        ) {
+                                                            Icon(
+                                                                imageVector = Icons.Default.Delete,
+                                                                contentDescription = "Delete Manual Node",
+                                                                tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
+                                                                modifier = Modifier.size(18.dp)
+                                                            )
+                                                        }
                                                     }
                                                 }
                                             }
@@ -1914,6 +1958,74 @@ fun MainScreen(
             dismissButton = {
                 TextButton(
                     onClick = { showImportDialog = false },
+                    modifier = Modifier.pressScaleEffect()
+                ) {
+                    Text("Cancel")
+                }
+            },
+            shape = RoundedCornerShape(28.dp)
+        )
+    }
+
+    // Edit Node Dialog
+    if (editingNodeLink != null) {
+        AlertDialog(
+            onDismissRequest = { editingNodeLink = null },
+            title = {
+                Text(
+                    text = "Edit Config Link",
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "Modify node configuration link:",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    OutlinedTextField(
+                        value = editLinkInput,
+                        onValueChange = { editLinkInput = it },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(160.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        placeholder = { Text("vless://...") }
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val originalLink = editingNodeLink
+                        if (originalLink != null && editLinkInput.trim().isNotEmpty()) {
+                            scope.launch {
+                                val currentManualList = manualServersStr.split("\n").filter { it.isNotEmpty() }
+                                val updatedManualList = currentManualList.map {
+                                    if (it == originalLink) editLinkInput.trim() else it
+                                }
+                                settingsManager.setManualServers(updatedManualList.joinToString("\n"))
+                                if (activeProfile == originalLink) {
+                                    settingsManager.setActiveProfile(editLinkInput.trim())
+                                    if (vpnState == "CONNECTED") {
+                                        startVpnService(context)
+                                    }
+                                }
+                                editingNodeLink = null
+                            }
+                        }
+                    },
+                    modifier = Modifier.pressScaleEffect(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Save")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { editingNodeLink = null },
                     modifier = Modifier.pressScaleEffect()
                 ) {
                     Text("Cancel")
