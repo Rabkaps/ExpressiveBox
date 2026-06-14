@@ -31,10 +31,10 @@ jobs:
       run: chmod +x gradlew
 
     - name: Build Debug APK
-      run: ./gradlew assembleDebug
+      run: ./gradlew assembleStandardDebug
 
     - name: Rename APK for Release
-      run: cp app/build/outputs/apk/debug/app-debug.apk ExpressiveBox-debug.apk
+      run: cp app/build/outputs/apk/standard/debug/app-standard-debug.apk ExpressiveBox-debug.apk
 
     - name: Upload ExpressiveBox Debug APK Artifact
       uses: actions/upload-artifact@v4
