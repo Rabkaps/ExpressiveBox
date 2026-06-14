@@ -70,6 +70,16 @@ ExpressiveBox is a modern, high-performance VPN client for Android built entirel
    ./gradlew installStandardDebug
    ```
 
+### ⚠️ Installation & Google Play Protect Warning
+
+When installing the built APK directly on a device, Google Play Protect may show a warning stating the app is blocked or from an unrecognized developer.
+
+* **Why this appears**: ExpressiveBox utilizes the sensitive Android `VpnService` API. Because self-built/debug APKs are signed with a local developer signature instead of a Google Play Store registered signature, Google Play Protect flags the app as unrecognized.
+* **How to proceed**:
+  1. In the warning popup, tap **"More details"**.
+  2. Select **"Install anyway"** to complete the installation.
+  3. (Optional for development) To disable these popups entirely, open the **Google Play Store**, tap your profile icon -> **Play Protect** -> **Settings (gear icon)**, and toggle off **"Scan apps with Play Protect"**.
+
 ---
 
 ## Development and Contributions

@@ -48,6 +48,7 @@ jobs:
       with:
         files: ExpressiveBox-debug.apk
         name: ExpressiveBox ${{ github.ref_name }}
+        body_path: .github/release_notes.md
         draft: false
         prerelease: false
       env:
