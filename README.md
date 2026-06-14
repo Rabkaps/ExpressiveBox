@@ -33,18 +33,6 @@ ExpressiveBox is a modern, high-performance VPN client for Android built entirel
 
 ---
 
-## Edition Variants
-
-ExpressiveBox supports two build variants:
-
-1.  **Standard Edition**: The clean, minimal, production-ready VPN client.
-2.  **Special Edition**: A personalized, expressive variant featuring:
-    *   **Interactive Peaking Kitty** and **Paw Print** animations.
-    *   **Gumball Love Notes**: A romantic random quote generator modal.
-    *   **Expressive Theme Palette**: Extra styling presets like Cherry Blossom, Lavender Dreams, and Rose Gold.
-
----
-
 ## Technical Specifications
 
 * **Minimum SDK**: Android 7.0 (API Level 24)
@@ -77,12 +65,7 @@ ExpressiveBox supports two build variants:
    ./gradlew assembleStandardDebug
    ```
 
-3. Build the debug APK for the **Special** flavor:
-   ```bash
-   ./gradlew assembleSpecialDebug
-   ```
-
-4. Install the application on a connected device:
+3. Install the application on a connected device:
    ```bash
    ./gradlew installStandardDebug
    ```
