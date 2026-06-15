@@ -307,18 +307,19 @@ fun ExpressiveBoxTheme(
         else -> LightColorScheme
     }
 
-    if (darkTheme) {
-        colorScheme = colorScheme.copy(
-            background = Color.Black,
-            surface = Color.Black,
-            surfaceContainer = Color.Black,
-            surfaceContainerHigh = Color.Black,
-            surfaceContainerHighest = Color.Black,
-            surfaceContainerLow = Color.Black,
-            surfaceContainerLowest = Color.Black,
-            surfaceVariant = Color.Black
-        )
-    }
+    // Removed pure black override to allow M3 Expressive container colors to show naturally
+    // if (darkTheme) {
+    //     colorScheme = colorScheme.copy(
+    //         background = Color.Black,
+    //         surface = Color.Black,
+    //         surfaceContainer = Color.Black,
+    //         surfaceContainerHigh = Color.Black,
+    //         surfaceContainerHighest = Color.Black,
+    //         surfaceContainerLow = Color.Black,
+    //         surfaceContainerLowest = Color.Black,
+    //         surfaceVariant = Color.Black
+    //     )
+    // }
 
     MaterialTheme(
         colorScheme = colorScheme,

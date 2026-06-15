@@ -297,8 +297,8 @@ class VpnServiceWrapper : VpnService(), PlatformInterface, CommandServerHandler 
         log("showLiveNotification toggle: $showLiveNotif")
         if (showLiveNotif && Build.VERSION.SDK_INT >= 36) {
             val manager = getSystemService(NotificationManager::class.java)
-            val allowed = manager?.canPostPromotedNotifications() ?: false
-            log("canPostPromotedNotifications check: $allowed")
+            // val allowed = manager?.canPostPromotedNotifications() ?: false
+            // log("canPostPromotedNotifications check: $allowed")
         }
         val notification = buildNotification(_vpnState.value)
         

@@ -64,9 +64,9 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import com.hambalapps.expressivebox.Config
 
 // Expressive shapes defining Material 3 Expressive aesthetics
-private val ExpressiveCardShape = RoundedCornerShape(topStart = 32.dp, bottomEnd = 32.dp, topEnd = 8.dp, bottomStart = 8.dp)
-private val ExpressiveButtonShape = RoundedCornerShape(topStart = 16.dp, bottomEnd = 16.dp, topEnd = 4.dp, bottomStart = 4.dp)
-private val ExpressiveChipShape = RoundedCornerShape(topStart = 8.dp, bottomEnd = 8.dp, topEnd = 2.dp, bottomStart = 2.dp)
+private val ExpressiveCardShape = RoundedCornerShape(topStart = 32.dp, bottomEnd = 32.dp, topEnd = 4.dp, bottomStart = 4.dp)
+private val ExpressiveButtonShape = RoundedCornerShape(topStart = 16.dp, bottomEnd = 16.dp, topEnd = 2.dp, bottomStart = 2.dp)
+private val ExpressiveChipShape = RoundedCornerShape(topStart = 12.dp, bottomEnd = 12.dp, topEnd = 4.dp, bottomStart = 4.dp)
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -122,22 +122,22 @@ fun MainScreen(
 
     // Auto subscription update check on launch
     LaunchedEffect(Unit) {
-        val currentSettings = settingsManager.settings.first()
-        val autoUpdate = currentSettings.autoUpdateSubs
-        if (autoUpdate) {
-            val interval = currentSettings.autoUpdateInterval
-            val lastTime = currentSettings.lastSubsUpdateTime
-            val currentTime = System.currentTimeMillis()
-            
-            val shouldUpdate = when (interval) {
-                "startup" -> true
-                "daily" -> (currentTime - lastTime) >= 24 * 60 * 60 * 1000L
-                "weekly" -> (currentTime - lastTime) >= 7 * 24 * 60 * 60 * 1000L
-                else -> false
-            }
-            
-            if (shouldUpdate) {
-                scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val currentSettings = settingsManager.settings.first()
+            val autoUpdate = currentSettings.autoUpdateSubs
+            if (autoUpdate) {
+                val interval = currentSettings.autoUpdateInterval
+                val lastTime = currentSettings.lastSubsUpdateTime
+                val currentTime = System.currentTimeMillis()
+
+                val shouldUpdate = when (interval) {
+                    "startup" -> true
+                    "daily" -> (currentTime - lastTime) >= 24 * 60 * 60 * 1000L
+                    "weekly" -> (currentTime - lastTime) >= 7 * 24 * 60 * 60 * 1000L
+                    else -> false
+                }
+
+                if (shouldUpdate) {
                     try {
                         val currentListStr = currentSettings.subscriptionList
                         val currentSubs = deserializeSubscriptions(currentListStr)
@@ -189,8 +189,10 @@ fun MainScreen(
     // Auto-select dedicated server on launch if active profile is empty (Special flavor only)
     LaunchedEffect(activeProfile) {
         if (Config.IS_SPECIAL && activeProfile.isEmpty() && Config.DEFAULT_PROFILE.isNotEmpty()) {
-            settingsManager.setActiveProfile(Config.DEFAULT_PROFILE)
-            settingsManager.setActiveSubId("special_default")
+            scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                settingsManager.setActiveProfile(Config.DEFAULT_PROFILE)
+                settingsManager.setActiveSubId("special_default")
+            }
         }
     }
 
@@ -2007,11 +2009,15 @@ fun MainScreen(
                                 }
                             }
 
-                            AnimatedVisibility(
-                                visible = isSearchVisible,
-                                enter = expandVertically() + fadeIn(),
-                                exit = shrinkVertically() + fadeOut()
-                            ) {
+                            AnimatedContent(
+                                targetState = isSearchVisible,
+                                label = "SearchBoxTransition",
+                                transitionSpec = {
+                                    (expandVertically(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow)) + fadeIn(animationSpec = tween(220))) togetherWith
+                                    shrinkVertically(animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow)) + fadeOut(animationSpec = tween(90))
+                                }
+                            ) { searchVisible ->
+                                if (searchVisible) {
                                 Column {
                                     Spacer(modifier = Modifier.height(8.dp))
                                     OutlinedTextField(
@@ -2030,6 +2036,7 @@ fun MainScreen(
                                             }
                                         }
                                     )
+                                }
                                 }
                             }
 
@@ -3036,7 +3043,11 @@ fun ConnectionDashboard(
                 modifier = Modifier.size(180.dp)
             ) {
                 // Custom Canvas-based WaveVisualizer (animates smoothly when connected/connecting)
-                if (state == "CONNECTED" || state == "CONNECTING") {
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = state == "CONNECTED" || state == "CONNECTING",
+                    enter = fadeIn(animationSpec = tween(700)),
+                    exit = fadeOut(animationSpec = tween(500))
+                ) {
                     WaveVisualizer(
                         state = state,
                         primaryColor = MaterialTheme.colorScheme.primary,
@@ -3378,22 +3389,32 @@ fun WaveVisualizer(
     secondaryColor: Color,
     modifier: Modifier = Modifier
 ) {
-    var phase1 by remember { mutableStateOf(0f) }
-    var phase2 by remember { mutableStateOf(0f) }
+    var phase1 = remember { androidx.compose.animation.core.Animatable(0f) }
+    var phase2 = remember { androidx.compose.animation.core.Animatable(0f) }
     
     LaunchedEffect(state) {
         if (state == "CONNECTED" || state == "CONNECTING") {
-            val speed1 = (2f * Math.PI.toFloat()) / 4500f // rad/ms
-            val speed2 = (-2f * Math.PI.toFloat()) / 6500f // rad/ms
-            var lastTime = withFrameMillis { it }
-            while (true) {
-                withFrameMillis { time ->
-                    val delta = time - lastTime
-                    lastTime = time
-                    phase1 = (phase1 + speed1 * delta) % (2f * Math.PI.toFloat())
-                    phase2 = (phase2 + speed2 * delta) % (2f * Math.PI.toFloat())
-                }
+            launch {
+                phase1.animateTo(
+                    targetValue = phase1.value + (2f * Math.PI.toFloat() * 100f),
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(durationMillis = 450000, easing = LinearEasing),
+                        repeatMode = RepeatMode.Restart
+                    )
+                )
             }
+            launch {
+                phase2.animateTo(
+                    targetValue = phase2.value - (2f * Math.PI.toFloat() * 100f),
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(durationMillis = 650000, easing = LinearEasing),
+                        repeatMode = RepeatMode.Restart
+                    )
+                )
+            }
+        } else {
+            phase1.stop()
+            phase2.stop()
         }
     }
     
@@ -3441,10 +3462,12 @@ fun WaveVisualizer(
         val centerY = height / 2f
         
         if (amplitudeMultiplier > 0.01f) {
-            val cosP1 = kotlin.math.cos(phase1)
-            val sinP1 = kotlin.math.sin(phase1)
-            val cosP2 = kotlin.math.cos(phase2)
-            val sinP2 = kotlin.math.sin(phase2)
+            val p1 = phase1.value % (2f * Math.PI.toFloat())
+            val p2 = phase2.value % (2f * Math.PI.toFloat())
+            val cosP1 = kotlin.math.cos(p1)
+            val sinP1 = kotlin.math.sin(p1)
+            val cosP2 = kotlin.math.cos(p2)
+            val sinP2 = kotlin.math.sin(p2)
             
             val breathing1 = 1f + 0.08f * sinP1
             val breathing2 = 1f + 0.12f * cosP2

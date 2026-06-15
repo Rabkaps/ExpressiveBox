@@ -10,7 +10,7 @@ configurations.all {
 
 android {
     namespace = "com.hambalapps.expressivebox"
-    compileSdk = 37
+    compileSdk = 34
     defaultConfig {
         applicationId = "com.hambalapps.expressivebox"
         minSdk = 24
