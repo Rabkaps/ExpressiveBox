@@ -30,13 +30,12 @@ jobs:
     - name: Grant Execute Permission to Gradlew
       run: chmod +x gradlew
 
-    - name: Build APKs (Standard & Special)
-      run: ./gradlew assembleStandardDebug assembleSpecialDebug
+    - name: Build APKs (Standard)
+      run: ./gradlew assembleStandardDebug 
 
     - name: Rename APKs for Release
       run: |
         cp app/build/outputs/apk/standard/debug/app-standard-debug.apk ExpressiveBox-standard.apk
-        cp app/build/outputs/apk/special/debug/app-special-debug.apk ExpressiveBox-special.apk
 
     - name: Upload ExpressiveBox Standard APK Artifact
       uses: actions/upload-artifact@v4
@@ -44,19 +43,12 @@ jobs:
         name: ExpressiveBox-standard-apk
         path: ExpressiveBox-standard.apk
 
-    - name: Upload ExpressiveBox Special APK Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: ExpressiveBox-special-apk
-        path: ExpressiveBox-special.apk
-
     - name: Create GitHub Release
       if: startsWith(github.ref, 'refs/tags/')
       uses: softprops/action-gh-release@v2
       with:
         files: |
           ExpressiveBox-standard.apk
-          ExpressiveBox-special.apk
         name: ExpressiveBox ${{ github.ref_name }}
         body_path: .github/release_notes.md
         draft: false
