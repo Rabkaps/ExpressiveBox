@@ -2090,6 +2090,12 @@ fun MainScreen(
                                 }
                             }
 
+                            val listEntranceFinished = remember(filteredServerList) { mutableStateOf(false) }
+                            LaunchedEffect(filteredServerList) {
+                                kotlinx.coroutines.delay(300)
+                                listEntranceFinished.value = true
+                            }
+
                             if (filteredServerList.isEmpty()) {
                                 Box(
                                     modifier = Modifier
@@ -2136,9 +2142,11 @@ fun MainScreen(
                                                 else -> MaterialTheme.colorScheme.onTertiaryContainer
                                             }
                                             
-                                            val itemVisible = remember(serverLink) { mutableStateOf(false) }
+                                            val itemVisible = remember(serverLink) { mutableStateOf(listEntranceFinished.value) }
                                             LaunchedEffect(serverLink) {
-                                                kotlinx.coroutines.delay(index.coerceAtMost(8) * 15L)
+                                                if (!listEntranceFinished.value) {
+                                                    kotlinx.coroutines.delay(index.coerceAtMost(8) * 15L)
+                                                }
                                                 itemVisible.value = true
                                             }
                                             val alpha by animateFloatAsState(
@@ -3094,8 +3102,8 @@ fun ConnectionDashboard(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier.size(180.dp)
             ) {
-                // Custom Canvas-based WaveVisualizer (animates smoothly when connected)
-                if (state == "CONNECTED") {
+                // Custom Canvas-based WaveVisualizer (animates smoothly when connected/connecting)
+                if (state == "CONNECTED" || state == "CONNECTING") {
                     WaveVisualizer(
                         state = state,
                         primaryColor = MaterialTheme.colorScheme.primary,
@@ -3400,6 +3408,62 @@ fun deserializeSubscriptions(data: String): List<Subscription> {
     }
 }
 
+private class WaveCache(points: Int) {
+    val cosAngle = FloatArray(points + 1)
+    val sinAngle = FloatArray(points + 1)
+    
+    val cos2a = FloatArray(points + 1)
+    val sin2a = FloatArray(points + 1)
+    
+    val cos3a = FloatArray(points + 1)
+    val sin3a = FloatArray(points + 1)
+    
+    val cos4a = FloatArray(points + 1)
+    val sin4a = FloatArray(points + 1)
+    
+    val cos5a = FloatArray(points + 1)
+    val sin5a = FloatArray(points + 1)
+    
+    val cos6a = FloatArray(points + 1)
+    val sin6a = FloatArray(points + 1)
+    
+    val cos7a = FloatArray(points + 1)
+    val sin7a = FloatArray(points + 1)
+    
+    val cos11a = FloatArray(points + 1)
+    val sin11a = FloatArray(points + 1)
+    
+    init {
+        val step = (2f * Math.PI / points).toFloat()
+        for (i in 0..points) {
+            val angle = i * step
+            cosAngle[i] = kotlin.math.cos(angle)
+            sinAngle[i] = kotlin.math.sin(angle)
+            
+            cos2a[i] = kotlin.math.cos(angle * 2f)
+            sin2a[i] = kotlin.math.sin(angle * 2f)
+            
+            cos3a[i] = kotlin.math.cos(angle * 3f)
+            sin3a[i] = kotlin.math.sin(angle * 3f)
+            
+            cos4a[i] = kotlin.math.cos(angle * 4f)
+            sin4a[i] = kotlin.math.sin(angle * 4f)
+            
+            cos5a[i] = kotlin.math.cos(angle * 5f)
+            sin5a[i] = kotlin.math.sin(angle * 5f)
+            
+            cos6a[i] = kotlin.math.cos(angle * 6f)
+            sin6a[i] = kotlin.math.sin(angle * 6f)
+            
+            cos7a[i] = kotlin.math.cos(angle * 7f)
+            sin7a[i] = kotlin.math.sin(angle * 7f)
+            
+            cos11a[i] = kotlin.math.cos(angle * 11f)
+            sin11a[i] = kotlin.math.sin(angle * 11f)
+        }
+    }
+}
+
 @Composable
 fun WaveVisualizer(
     state: String,
@@ -3407,29 +3471,27 @@ fun WaveVisualizer(
     secondaryColor: Color,
     modifier: Modifier = Modifier
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "wave")
+    var phase1 by remember { mutableStateOf(0f) }
+    var phase2 by remember { mutableStateOf(0f) }
     
-    val phase1 by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 2f * Math.PI.toFloat(),
-        animationSpec = infiniteRepeatable(
-            animation = tween(4500, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "phase1"
-    )
-    val phase2 by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = -2f * Math.PI.toFloat(),
-        animationSpec = infiniteRepeatable(
-            animation = tween(6500, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "phase2"
-    )
+    LaunchedEffect(state) {
+        if (state == "CONNECTED" || state == "CONNECTING") {
+            val speed1 = (2f * Math.PI.toFloat()) / 4500f // rad/ms
+            val speed2 = (-2f * Math.PI.toFloat()) / 6500f // rad/ms
+            var lastTime = withFrameMillis { it }
+            while (true) {
+                withFrameMillis { time ->
+                    val delta = time - lastTime
+                    lastTime = time
+                    phase1 = (phase1 + speed1 * delta) % (2f * Math.PI.toFloat())
+                    phase2 = (phase2 + speed2 * delta) % (2f * Math.PI.toFloat())
+                }
+            }
+        }
+    }
     
     val amplitudeMultiplier by animateFloatAsState(
-        targetValue = if (state == "CONNECTED") 1f else 0f,
+        targetValue = if (state == "CONNECTED" || state == "CONNECTING") 1f else 0f,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioNoBouncy,
             stiffness = Spring.StiffnessVeryLow
@@ -3438,7 +3500,7 @@ fun WaveVisualizer(
     )
     
     val scaleFactor by animateFloatAsState(
-        targetValue = if (state == "CONNECTED") 1f else 0.5f,
+        targetValue = if (state == "CONNECTED" || state == "CONNECTING") 1f else 0.5f,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
             stiffness = Spring.StiffnessLow
@@ -3446,7 +3508,6 @@ fun WaveVisualizer(
         label = "scale"
     )
     
-    // Cache Density Calculations and pre-allocate paths to avoid frames allocation stutter (low garbage collection)
     val density = androidx.compose.ui.platform.LocalDensity.current
     val baseRadius1Px = remember(density) { density.run { 61.dp.toPx() } }
     val baseRadius2Px = remember(density) { density.run { 73.dp.toPx() } }
@@ -3464,6 +3525,8 @@ fun WaveVisualizer(
     val path2 = remember { Path() }
     val path3 = remember { Path() }
     
+    val waveCache = remember { WaveCache(80) }
+    
     Canvas(modifier = modifier) {
         val width = size.width
         val height = size.height
@@ -3471,23 +3534,28 @@ fun WaveVisualizer(
         val centerY = height / 2f
         
         if (amplitudeMultiplier > 0.01f) {
-            // Slow breathing modulations for a truly live, breathing organic feeling (using integer phase multipliers to ensure smooth end-of-loop boundaries)
-            val breathing1 = 1f + 0.08f * sin(phase1)
-            val breathing2 = 1f + 0.12f * cos(phase2)
-            val breathing3 = 1f + 0.15f * sin(phase1)
+            val cosP1 = kotlin.math.cos(phase1)
+            val sinP1 = kotlin.math.sin(phase1)
+            val cosP2 = kotlin.math.cos(phase2)
+            val sinP2 = kotlin.math.sin(phase2)
             
-            // Draw Wave 1 (Main Circle - prominent active border)
+            val breathing1 = 1f + 0.08f * sinP1
+            val breathing2 = 1f + 0.12f * cosP2
+            val breathing3 = 1f + 0.15f * sinP1
+            
+            // Draw Wave 1 (Main Circle)
             path1.reset()
-            val points1 = 80 // Reduced point count for low overhead trig calculation
-            val step1 = (2f * Math.PI / points1).toFloat()
+            val points1 = 80
             for (i in 0..points1) {
-                val angle = i * step1
-                // Asymmetric multi-harmonic wave with smooth periodic phase bounds (no fractional phase speeds to prevent sudden loop jumps)
-                val waveOffset = (sin(angle * 4f + phase1) * 0.5f + cos(angle * 6f - phase2) * 0.3f + sin(angle * 2f + phase1) * 0.2f)
+                val s4 = waveCache.sin4a[i] * cosP1 + waveCache.cos4a[i] * sinP1
+                val c6 = waveCache.cos6a[i] * cosP2 + waveCache.sin6a[i] * sinP2
+                val s2 = waveCache.sin2a[i] * cosP1 + waveCache.cos2a[i] * sinP1
+                
+                val waveOffset = s4 * 0.5f + c6 * 0.3f + s2 * 0.2f
                 val wave = waveOffset * amp1Px * amplitudeMultiplier * breathing1
                 val r = (baseRadius1Px + wave) * scaleFactor
-                val x = centerX + r * cos(angle)
-                val y = centerY + r * sin(angle)
+                val x = centerX + r * waveCache.cosAngle[i]
+                val y = centerY + r * waveCache.sinAngle[i]
                 if (i == 0) {
                     path1.moveTo(x, y)
                 } else {
@@ -3497,22 +3565,23 @@ fun WaveVisualizer(
             path1.close()
             drawPath(
                 path = path1,
-                color = primaryColor.copy(alpha = 0.85f * amplitudeMultiplier), // Prominent active border
+                color = primaryColor.copy(alpha = 0.85f * amplitudeMultiplier),
                 style = Stroke(width = stroke1Px)
             )
             
-            // Draw Wave 2 (Middle Stripe - secondary color)
+            // Draw Wave 2 (Middle Stripe)
             path2.reset()
             val points2 = 80
-            val step2 = (2f * Math.PI / points2).toFloat()
             for (i in 0..points2) {
-                val angle = i * step2
-                // Asymmetric multi-harmonic wave with smooth periodic phase bounds
-                val waveOffset = (sin(angle * 5f - phase2) * 0.6f + cos(angle * 3f + phase1) * 0.3f + sin(angle * 7f - phase2) * 0.1f)
+                val s5 = waveCache.sin5a[i] * cosP2 - waveCache.cos5a[i] * sinP2
+                val c3 = waveCache.cos3a[i] * cosP1 - waveCache.sin3a[i] * sinP1
+                val s7 = waveCache.sin7a[i] * cosP2 - waveCache.cos7a[i] * sinP2
+                
+                val waveOffset = s5 * 0.6f + c3 * 0.3f + s7 * 0.1f
                 val wave = waveOffset * amp2Px * amplitudeMultiplier * breathing2
                 val r = (baseRadius2Px + wave) * scaleFactor
-                val x = centerX + r * cos(angle)
-                val y = centerY + r * sin(angle)
+                val x = centerX + r * waveCache.cosAngle[i]
+                val y = centerY + r * waveCache.sinAngle[i]
                 if (i == 0) {
                     path2.moveTo(x, y)
                 } else {
@@ -3526,18 +3595,19 @@ fun WaveVisualizer(
                 style = Stroke(width = stroke2Px)
             )
             
-            // Draw Wave 3 (Outer Stripe - thin primary color)
+            // Draw Wave 3 (Outer Stripe)
             path3.reset()
             val points3 = 80
-            val step3 = (2f * Math.PI / points3).toFloat()
             for (i in 0..points3) {
-                val angle = i * step3
-                // Asymmetric multi-harmonic wave with smooth periodic phase bounds
-                val waveOffset = (cos(angle * 3f + phase1) * 0.5f + sin(angle * 7f - phase2) * 0.3f + cos(angle * 11f + phase1) * 0.2f)
+                val c3 = waveCache.cos3a[i] * cosP1 - waveCache.sin3a[i] * sinP1
+                val s7 = waveCache.sin7a[i] * cosP2 - waveCache.cos7a[i] * sinP2
+                val c11 = waveCache.cos11a[i] * cosP1 - waveCache.sin11a[i] * sinP1
+                
+                val waveOffset = c3 * 0.5f + s7 * 0.3f + c11 * 0.2f
                 val wave = waveOffset * amp3Px * amplitudeMultiplier * breathing3
                 val r = (baseRadius3Px + wave) * scaleFactor
-                val x = centerX + r * cos(angle)
-                val y = centerY + r * sin(angle)
+                val x = centerX + r * waveCache.cosAngle[i]
+                val y = centerY + r * waveCache.sinAngle[i]
                 if (i == 0) {
                     path3.moveTo(x, y)
                 } else {
