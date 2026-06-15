@@ -214,7 +214,19 @@ fun MainScreen(
 
     // Observe VPN state and logs
     val vpnState by VpnServiceWrapper.vpnState.collectAsStateWithLifecycle()
-    val vpnLogs by VpnServiceWrapper.vpnLogs.collectAsStateWithLifecycle()
+    val appVersion = remember {
+        try {
+            val pInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                context.packageManager.getPackageInfo(context.packageName, android.content.pm.PackageManager.PackageInfoFlags.of(0))
+            } else {
+                @Suppress("DEPRECATION")
+                context.packageManager.getPackageInfo(context.packageName, 0)
+            }
+            "v${pInfo.versionName}"
+        } catch (e: Exception) {
+            "v1.0.60"
+        }
+    }
 
     var showImportDialog by remember { mutableStateOf(false) }
     var importText by remember { mutableStateOf("") }
@@ -382,7 +394,7 @@ fun MainScreen(
                                     )
                                 }
                                 Text(
-                                    text = "v1.0.51",
+                                    text = appVersion,
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -1867,9 +1879,8 @@ fun MainScreen(
                                                 enabled = !isRefreshing
                                             ) {
                                                 if (isRefreshing) {
-                                                    CircularProgressIndicator(
+                                                    LoadingIndicator(
                                                         modifier = Modifier.size(18.dp),
-                                                        strokeWidth = 2.dp,
                                                         color = MaterialTheme.colorScheme.primary
                                                     )
                                                 } else {
@@ -2484,71 +2495,7 @@ fun MainScreen(
                         )
                     )
                 ) {
-                    OutlinedCard(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp)
-                            .height(280.dp),
-                        shape = ExpressiveCardShape,
-                        colors = CardDefaults.outlinedCardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainer
-                        )
-                    ) {
-                        Column(modifier = Modifier.padding(18.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        imageVector = Icons.Default.Terminal,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "Engine Logs",
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        fontWeight = FontWeight.Bold,
-                                        fontFamily = FontFamily.Monospace,
-                                        style = MaterialTheme.typography.bodyMedium
-                                    )
-                                }
-                                Row {
-                                    TextButton(
-                                        onClick = {
-                                            val clipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                                            val clip = android.content.ClipData.newPlainText("VPN Logs", vpnLogs)
-                                            clipboardManager.setPrimaryClip(clip)
-                                        },
-                                        modifier = Modifier.pressScaleEffect()
-                                    ) {
-                                        Text("Copy")
-                                    }
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    TextButton(
-                                        onClick = { VpnServiceWrapper.clearLogs() },
-                                        modifier = Modifier.pressScaleEffect()
-                                    ) {
-                                        Text("Clear")
-                                    }
-                                }
-                            }
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Box(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-                                Text(
-                                    text = if (vpnLogs.isEmpty()) "Logs will output here..." else vpnLogs,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontSize = 11.sp,
-                                    fontFamily = FontFamily.Monospace,
-                                    lineHeight = 16.sp
-                                )
-                            }
-                        }
-                    }
+                    LogsConsole(context = context)
                 }
 
                 Spacer(modifier = Modifier.height(32.dp))
@@ -3800,6 +3747,75 @@ fun PawPrint(
     }
 }
 
-
-
-
+@Composable
+private fun LogsConsole(
+    context: Context,
+    modifier: Modifier = Modifier
+) {
+    val vpnLogs by VpnServiceWrapper.vpnLogs.collectAsStateWithLifecycle()
+    OutlinedCard(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .height(280.dp),
+        shape = RoundedCornerShape(topStart = 32.dp, bottomEnd = 32.dp, topEnd = 8.dp, bottomStart = 8.dp), // ExpressiveCardShape
+        colors = CardDefaults.outlinedCardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer
+        )
+    ) {
+        Column(modifier = Modifier.padding(18.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Terminal,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Engine Logs",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+                Row {
+                    TextButton(
+                        onClick = {
+                            val clipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                            val clip = android.content.ClipData.newPlainText("VPN Logs", vpnLogs)
+                            clipboardManager.setPrimaryClip(clip)
+                        },
+                        modifier = Modifier.pressScaleEffect()
+                    ) {
+                        Text("Copy")
+                    }
+                    Spacer(modifier = Modifier.width(4.dp))
+                    TextButton(
+                        onClick = { VpnServiceWrapper.clearLogs() },
+                        modifier = Modifier.pressScaleEffect()
+                    ) {
+                        Text("Clear")
+                    }
+                }
+            }
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Spacer(modifier = Modifier.height(10.dp))
+            Box(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                Text(
+                    text = if (vpnLogs.isEmpty()) "Logs will output here..." else vpnLogs,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.Monospace,
+                    lineHeight = 16.sp
+                )
+            }
+        }
+    }
+}
