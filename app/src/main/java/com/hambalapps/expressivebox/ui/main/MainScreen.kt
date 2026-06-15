@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hambalapps.expressivebox.data.SettingsManager
+import com.hambalapps.expressivebox.data.UserSettings
 import com.hambalapps.expressivebox.vpn.VpnServiceWrapper
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -75,27 +76,28 @@ fun MainScreen(
     val settingsManager = remember { SettingsManager(context) }
 
     // Observe settings from DataStore
-    val isAdvancedMode by settingsManager.isAdvancedMode.collectAsStateWithLifecycle(initialValue = false)
-    val bypassIran by settingsManager.bypassIran.collectAsStateWithLifecycle(initialValue = true)
-    val bypassLan by settingsManager.bypassLan.collectAsStateWithLifecycle(initialValue = true)
-    val secureDns by settingsManager.secureDns.collectAsStateWithLifecycle(initialValue = "https://1.1.1.1/dns-query")
-    val tunStack by settingsManager.tunStack.collectAsStateWithLifecycle(initialValue = "mixed")
-    val enableFragment by settingsManager.enableFragment.collectAsStateWithLifecycle(initialValue = false)
-    val fragmentLength by settingsManager.fragmentLength.collectAsStateWithLifecycle(initialValue = "10-20")
-    val fragmentInterval by settingsManager.fragmentInterval.collectAsStateWithLifecycle(initialValue = "10-20")
-    val enableMux by settingsManager.enableMux.collectAsStateWithLifecycle(initialValue = false)
-    val activeProfile by settingsManager.activeProfile.collectAsStateWithLifecycle(initialValue = "")
-    val subscriptionUrl by settingsManager.subscriptionUrl.collectAsStateWithLifecycle(initialValue = "")
-    val subscriptionListStr by settingsManager.subscriptionList.collectAsStateWithLifecycle(initialValue = "")
-    val activeSubId by settingsManager.activeSubId.collectAsStateWithLifecycle(initialValue = "")
-    val showLiveNotification by settingsManager.showLiveNotification.collectAsStateWithLifecycle(initialValue = true)
-    val splitTunnelingEnabled by settingsManager.splitTunnelingEnabled.collectAsStateWithLifecycle(initialValue = false)
-    val splitTunnelingApps by settingsManager.splitTunnelingApps.collectAsStateWithLifecycle(initialValue = emptySet())
-    val splitTunnelingMode by settingsManager.splitTunnelingMode.collectAsStateWithLifecycle(initialValue = "bypass")
-    val manualServersStr by settingsManager.manualServers.collectAsStateWithLifecycle(initialValue = "")
-    val autoUpdateSubs by settingsManager.autoUpdateSubs.collectAsStateWithLifecycle(initialValue = true)
-    val autoUpdateInterval by settingsManager.autoUpdateInterval.collectAsStateWithLifecycle(initialValue = "daily")
-    val lastSubsUpdateTime by settingsManager.lastSubsUpdateTime.collectAsStateWithLifecycle(initialValue = 0L)
+    val settings by settingsManager.settings.collectAsStateWithLifecycle(initialValue = SettingsManager.defaultSettings)
+    val isAdvancedMode = settings.isAdvancedMode
+    val bypassIran = settings.bypassIran
+    val bypassLan = settings.bypassLan
+    val secureDns = settings.secureDns
+    val tunStack = settings.tunStack
+    val enableFragment = settings.enableFragment
+    val fragmentLength = settings.fragmentLength
+    val fragmentInterval = settings.fragmentInterval
+    val enableMux = settings.enableMux
+    val activeProfile = settings.activeProfile
+    val subscriptionUrl = settings.subscriptionUrl
+    val subscriptionListStr = settings.subscriptionList
+    val activeSubId = settings.activeSubId
+    val showLiveNotification = settings.showLiveNotification
+    val splitTunnelingEnabled = settings.splitTunnelingEnabled
+    val splitTunnelingApps = settings.splitTunnelingApps
+    val splitTunnelingMode = settings.splitTunnelingMode
+    val manualServersStr = settings.manualServers
+    val autoUpdateSubs = settings.autoUpdateSubs
+    val autoUpdateInterval = settings.autoUpdateInterval
+    val lastSubsUpdateTime = settings.lastSubsUpdateTime
 
     val subscriptions = remember(subscriptionListStr, manualServersStr) {
         val list = deserializeSubscriptions(subscriptionListStr).toMutableList()

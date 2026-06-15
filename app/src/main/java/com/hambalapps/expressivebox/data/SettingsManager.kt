@@ -34,6 +34,60 @@ class SettingsManager(private val context: Context) {
         val AUTO_UPDATE_SUBS = booleanPreferencesKey("auto_update_subs")
         val AUTO_UPDATE_INTERVAL = stringPreferencesKey("auto_update_interval")
         val LAST_SUBS_UPDATE_TIME = longPreferencesKey("last_subs_update_time")
+        
+        val defaultSettings = UserSettings(
+            isAdvancedMode = false,
+            bypassIran = true,
+            secureDns = "https://1.1.1.1/dns-query",
+            tunStack = "mixed",
+            enableFragment = false,
+            fragmentLength = "10-20",
+            fragmentInterval = "10-20",
+            enableMux = false,
+            activeProfile = "",
+            subscriptionUrl = "",
+            subscriptionServers = "",
+            subscriptionList = "",
+            activeSubId = "",
+            showLiveNotification = true,
+            splitTunnelingEnabled = false,
+            splitTunnelingMode = "bypass",
+            splitTunnelingApps = emptySet(),
+            manualServers = "",
+            specialTheme = "cherry_blossom",
+            bypassLan = true,
+            autoUpdateSubs = true,
+            autoUpdateInterval = "daily",
+            lastSubsUpdateTime = 0L
+        )
+    }
+
+    val settings: Flow<UserSettings> = context.dataStore.data.map { prefs ->
+        UserSettings(
+            isAdvancedMode = prefs[IS_ADVANCED_MODE] ?: false,
+            bypassIran = prefs[BYPASS_IRAN] ?: true,
+            secureDns = prefs[SECURE_DNS] ?: "https://1.1.1.1/dns-query",
+            tunStack = prefs[TUN_STACK] ?: "mixed",
+            enableFragment = prefs[ENABLE_FRAGMENT] ?: false,
+            fragmentLength = prefs[FRAGMENT_LENGTH] ?: "10-20",
+            fragmentInterval = prefs[FRAGMENT_INTERVAL] ?: "10-20",
+            enableMux = prefs[ENABLE_MUX] ?: false,
+            activeProfile = prefs[ACTIVE_PROFILE] ?: "",
+            subscriptionUrl = prefs[SUBSCRIPTION_URL] ?: "",
+            subscriptionServers = prefs[SUBSCRIPTION_SERVERS] ?: "",
+            subscriptionList = prefs[SUBSCRIPTION_LIST] ?: "",
+            activeSubId = prefs[ACTIVE_SUB_ID] ?: "",
+            showLiveNotification = prefs[SHOW_LIVE_NOTIFICATION] ?: true,
+            splitTunnelingEnabled = prefs[SPLIT_TUNNELING_ENABLED] ?: false,
+            splitTunnelingMode = prefs[SPLIT_TUNNELING_MODE] ?: "bypass",
+            splitTunnelingApps = prefs[SPLIT_TUNNELING_APPS] ?: emptySet(),
+            manualServers = prefs[MANUAL_SERVERS] ?: "",
+            specialTheme = prefs[SPECIAL_THEME] ?: "cherry_blossom",
+            bypassLan = prefs[BYPASS_LAN] ?: true,
+            autoUpdateSubs = prefs[AUTO_UPDATE_SUBS] ?: true,
+            autoUpdateInterval = prefs[AUTO_UPDATE_INTERVAL] ?: "daily",
+            lastSubsUpdateTime = prefs[LAST_SUBS_UPDATE_TIME] ?: 0L
+        )
     }
 
     val isAdvancedMode: Flow<Boolean> = context.dataStore.data.map { it[IS_ADVANCED_MODE] ?: false }
@@ -84,3 +138,29 @@ class SettingsManager(private val context: Context) {
     suspend fun setAutoUpdateInterval(value: String) { context.dataStore.edit { it[AUTO_UPDATE_INTERVAL] = value } }
     suspend fun setLastSubsUpdateTime(value: Long) { context.dataStore.edit { it[LAST_SUBS_UPDATE_TIME] = value } }
 }
+
+data class UserSettings(
+    val isAdvancedMode: Boolean,
+    val bypassIran: Boolean,
+    val secureDns: String,
+    val tunStack: String,
+    val enableFragment: Boolean,
+    val fragmentLength: String,
+    val fragmentInterval: String,
+    val enableMux: Boolean,
+    val activeProfile: String,
+    val subscriptionUrl: String,
+    val subscriptionServers: String,
+    val subscriptionList: String,
+    val activeSubId: String,
+    val showLiveNotification: Boolean,
+    val splitTunnelingEnabled: Boolean,
+    val splitTunnelingMode: String,
+    val splitTunnelingApps: Set<String>,
+    val manualServers: String,
+    val specialTheme: String,
+    val bypassLan: Boolean,
+    val autoUpdateSubs: Boolean,
+    val autoUpdateInterval: String,
+    val lastSubsUpdateTime: Long
+)
