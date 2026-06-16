@@ -23,3 +23,5 @@ local.properties
 # Local scratch files and IDE agents config
 /scratch/
 /.claude/
+*.apk
+/app/release.keystore

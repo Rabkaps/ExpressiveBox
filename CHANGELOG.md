@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.68] - 2026-06-16
+
+### Added
+- **Material 3 Expressive Card Styling**: Upgraded all major layout cards (Connection Dashboard, Profile Selection, Available Nodes, Love Quotes, and Logs Console) with premium, dynamic gradient borders that adapt to active Monet accent colors.
+- **AMOLED Dark Theme Elevation**: Updated dark theme color mapping in `Theme.kt` to define surfaces with premium, very dark obsidian shades rather than flat pitch-black. This provides clear container hierarchy and elevation shadows while maintaining a pitch-black background on AMOLED screens.
+
 ## [1.0.67] - 2026-06-16
 
 ### Fixed

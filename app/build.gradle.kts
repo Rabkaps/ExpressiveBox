@@ -15,8 +15,8 @@ android {
         applicationId = "com.hambalapps.expressivebox"
         minSdk = 24
         targetSdk = 36
-        versionCode = 67
-        versionName = "1.0.67"
+        versionCode = 68
+        versionName = "1.0.68"
         ndk {
             abiFilters += "arm64-v8a"
         }
@@ -41,6 +41,21 @@ android {
             keyAlias = "androiddebugkey"
             keyPassword = "android"
         }
+        create("release") {
+            val releaseKeystore = file("release.keystore")
+            if (releaseKeystore.exists()) {
+                storeFile = releaseKeystore
+                storePassword = "expressivebox"
+                keyAlias = "expressivekey"
+                keyPassword = "expressivebox"
+            } else {
+                // Fallback to debug keystore on CI/GitHub actions if release key is missing
+                storeFile = file("debug.keystore")
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
+        }
     }
 
     buildTypes {
@@ -49,7 +64,7 @@ android {
         }
         release {
             isMinifyEnabled = true
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }

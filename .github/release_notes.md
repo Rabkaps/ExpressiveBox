@@ -1,12 +1,10 @@
-### What's New in v1.0.67
+### What's New in v1.0.68
 
-This release introduces critical performance optimizations to resolve startup stuttering and lags.
+This release introduces refined Material 3 Expressive card designs and improved dark theme elevation.
 
-#### Performance Improvements
-- **Native Dynamic Colors**: Replaced slow, custom reflection-based system resource lookups in `Theme` with native Android Material 3 Dynamic Color APIs, accelerating initial composition.
-- **Off-Main-Thread Startup Checks**: Moved settings reads and subscription updates in `MainScreen` entirely to background IO threads to keep the main UI thread free of disk/network wait states on launch.
-- **Removed Display Sync Pass**: Reverted programmatic preferred refresh rate adjustments on startup to prevent window layout pass freezes.
-- **Production R8 Optimization**: Pipeline now builds optimized Release APKs with full code shrinking, optimizations, and baseline profiles.
+#### New Design Elements
+- **Dynamic Gradient Card Outlines**: All major cards (Dashboard, Selection, Nodes, Quotes, and Console) now feature dynamic linear gradient borders utilizing active Monet system accent colors.
+- **AMOLED Dark Theme Depth**: Surfaces are styled with rich, extremely dark obsidian tones (rather than flat black) to give clear elevation layout borders and shape definitions under dark theme, while keeping the main background solid pitch-black.
 
 ---
 

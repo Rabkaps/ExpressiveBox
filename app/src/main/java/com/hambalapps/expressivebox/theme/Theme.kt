@@ -199,13 +199,13 @@ fun ExpressiveBoxTheme(
         if (darkTheme) {
             baseScheme.copy(
                 background = Color.Black,
-                surface = Color.Black,
-                surfaceContainer = Color.Black,
-                surfaceContainerHigh = Color.Black,
-                surfaceContainerHighest = Color.Black,
-                surfaceContainerLow = Color.Black,
-                surfaceContainerLowest = Color.Black,
-                surfaceVariant = Color.Black
+                surface = Color(0xFF0C0C0E),
+                surfaceVariant = Color(0xFF131316),
+                surfaceContainer = Color(0xFF0F0F12),
+                surfaceContainerHigh = Color(0xFF161619),
+                surfaceContainerHighest = Color(0xFF1D1D22),
+                surfaceContainerLow = Color(0xFF09090B),
+                surfaceContainerLowest = Color(0xFF050507)
             )
         } else {
             baseScheme
