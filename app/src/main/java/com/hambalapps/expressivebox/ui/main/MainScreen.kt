@@ -123,22 +123,22 @@ fun MainScreen(
 
     // Auto subscription update check on launch
     LaunchedEffect(Unit) {
-        val currentSettings = settingsManager.settings.first()
-        val autoUpdate = currentSettings.autoUpdateSubs
-        if (autoUpdate) {
-            val interval = currentSettings.autoUpdateInterval
-            val lastTime = currentSettings.lastSubsUpdateTime
-            val currentTime = System.currentTimeMillis()
-            
-            val shouldUpdate = when (interval) {
-                "startup" -> true
-                "daily" -> (currentTime - lastTime) >= 24 * 60 * 60 * 1000L
-                "weekly" -> (currentTime - lastTime) >= 7 * 24 * 60 * 60 * 1000L
-                else -> false
-            }
-            
-            if (shouldUpdate) {
-                scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val currentSettings = settingsManager.settings.first()
+            val autoUpdate = currentSettings.autoUpdateSubs
+            if (autoUpdate) {
+                val interval = currentSettings.autoUpdateInterval
+                val lastTime = currentSettings.lastSubsUpdateTime
+                val currentTime = System.currentTimeMillis()
+                
+                val shouldUpdate = when (interval) {
+                    "startup" -> true
+                    "daily" -> (currentTime - lastTime) >= 24 * 60 * 60 * 1000L
+                    "weekly" -> (currentTime - lastTime) >= 7 * 24 * 60 * 60 * 1000L
+                    else -> false
+                }
+                
+                if (shouldUpdate) {
                     try {
                         val currentListStr = currentSettings.subscriptionList
                         val currentSubs = deserializeSubscriptions(currentListStr)
@@ -160,6 +160,7 @@ fun MainScreen(
                                 sub
                             }
                         }
+
                         if (anyUpdated) {
                             settingsManager.setSubscriptionList(serializeSubscriptions(updatedSubs.filter { !it.url.startsWith("local://") }))
                             
@@ -171,7 +172,7 @@ fun MainScreen(
                                 if (sList.isNotEmpty() && !sList.contains(activeProfileVal)) {
                                     settingsManager.setActiveProfile(sList[0])
                                     if (VpnServiceWrapper.vpnState.value == "CONNECTED") {
-                                        scope.launch(kotlinx.coroutines.Dispatchers.Main) {
+                                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                                             startVpnService(context)
                                         }
                                     }
@@ -207,7 +208,7 @@ fun MainScreen(
             }
             "v${pInfo.versionName}"
         } catch (e: Exception) {
-            "v1.0.66"
+            "v1.0.67"
         }
     }
 

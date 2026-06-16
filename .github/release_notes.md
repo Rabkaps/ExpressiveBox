@@ -1,10 +1,12 @@
-### What's New in v1.0.66
+### What's New in v1.0.67
 
-This release resolves the cold startup stutter/lag issues on variable refresh rate (VRR) screens and optimizes node list rendering.
+This release introduces critical performance optimizations to resolve startup stuttering and lags.
 
 #### Performance Improvements
-- **120Hz Refresh Rate (Startup Stutter Fix)**: Programmatically requests high refresh rate (120Hz) on launch in `MainActivity` to prevent the system display compositor from locking the window to a low refresh rate (30Hz/60Hz) on cold launch.
-- **Snappy Node List Rendering**: Excluded heavy animations, LaunchedEffects, and float animations from `LazyColumn` items to prevent lag on launch/search/tab navigation regardless of the user's node count.
+- **Native Dynamic Colors**: Replaced slow, custom reflection-based system resource lookups in `Theme` with native Android Material 3 Dynamic Color APIs, accelerating initial composition.
+- **Off-Main-Thread Startup Checks**: Moved settings reads and subscription updates in `MainScreen` entirely to background IO threads to keep the main UI thread free of disk/network wait states on launch.
+- **Removed Display Sync Pass**: Reverted programmatic preferred refresh rate adjustments on startup to prevent window layout pass freezes.
+- **Production R8 Optimization**: Pipeline now builds optimized Release APKs with full code shrinking, optimizations, and baseline profiles.
 
 ---
 

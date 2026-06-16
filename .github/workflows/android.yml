@@ -31,11 +31,11 @@ jobs:
       run: chmod +x gradlew
 
     - name: Build APK (Standard Only)
-      run: ./gradlew assembleStandardDebug
+      run: ./gradlew assembleStandardRelease
 
     - name: Rename APK for Release
       run: |
-        cp app/build/outputs/apk/standard/debug/app-standard-debug.apk ExpressiveBox-standard.apk
+        cp app/build/outputs/apk/standard/release/app-standard-release.apk ExpressiveBox-standard.apk
 
     - name: Upload ExpressiveBox Standard APK Artifact
       uses: actions/upload-artifact@v4

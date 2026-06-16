@@ -1,0 +1,7 @@
+Lcom/hambalapps/expressivebox/MainActivity;
+Lcom/hambalapps/expressivebox/NavigationKt;
+Lcom/hambalapps/expressivebox/ui/main/MainScreenKt;
+Lcom/hambalapps/expressivebox/ui/main/MainScreenViewModel;
+Lcom/hambalapps/expressivebox/data/SettingsManager;
+Lcom/hambalapps/expressivebox/theme/ThemeKt;
+Lcom/hambalapps/expressivebox/vpn/VpnServiceWrapper;

@@ -39,12 +39,6 @@ class MainActivity : ComponentActivity() {
     DynamicColors.applyToActivityIfAvailable(this)
     super.onCreate(savedInstanceState)
 
-    // Request high refresh rate (e.g. 120Hz) if supported by the display to prevent startup refresh rate lock bugs
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-      val layoutParams = window.attributes
-      layoutParams.preferredRefreshRate = 120f
-      window.attributes = layoutParams
-    }
 
     // Uncaught exception handler to log JVM crashes
     val originalHandler = Thread.getDefaultUncaughtExceptionHandler()

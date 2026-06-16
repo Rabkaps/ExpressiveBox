@@ -5,10 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.67] - 2026-06-16
+
+### Fixed
+- **Startup Resource Resolution Lag**: Replaced reflection-based custom dynamic system color resolution in `Theme.kt` with optimized native `dynamicDarkColorScheme` and `dynamicLightColorScheme` Material 3 APIs to eliminate resource-mapping latency.
+- **Refresh Rate Overhead**: Reverted programmatic preferred refresh rate changes in `MainActivity.kt` to prevent layout pass locks and synchronization lags on startup.
+- **Off-Main-Thread Subscription Check**: Moved the startup subscription checks and DataStore reads in `MainScreen` entirely to a background thread using `withContext(Dispatchers.IO)`.
+- **Optimization Release**: Adjusted CI workflow and build scripts to compile and publish production-optimized Release APKs with full R8 optimization and code shrinking.
+
 ## [1.0.66] - 2026-06-16
 
 ### Fixed
-- **VRR Refresh Rate Lock (Cold Launch Stutter)**: Programmatically requested high refresh rate (120Hz) on application launch inside `MainActivity`. This bypasses variable refresh rate (VRR) display bugs on Samsung/OnePlus/Xiaomi/Pixel devices that lock the window to a low refresh rate (30Hz/60Hz) on cold startup.
+- **VRR Refresh Rate Lock (Cold Launch Stutter)**: Programmatically requested high refresh rate (120Hz) on application launch inside `MainActivity`. This bypasses variable refresh rate (VRR) display bugs on Samsung/OnePlus/Xiaomi/Pixel devices that lock the window to a low refresh rate (30Hz/60Hz) on cold startup (reverted in v1.0.67).
 - **Node List Transition Lag**: Removed expensive per-item coroutines and float animations inside the available nodes list `LazyColumn` to eliminate lag/stutter when drawing the list, regardless of the user's node count.
 - **Drawer Version**: Displays version `v1.0.66`.
 
