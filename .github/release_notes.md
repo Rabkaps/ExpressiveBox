@@ -1,10 +1,9 @@
-### What's New in v1.0.68
+### What's New in v1.0.69
 
-This release introduces refined Material 3 Expressive card designs and improved dark theme elevation.
+This release fixes a critical native Go library crash that occurred frequently during network state changes or high load on newer devices.
 
-#### New Design Elements
-- **Dynamic Gradient Card Outlines**: All major cards (Dashboard, Selection, Nodes, Quotes, and Console) now feature dynamic linear gradient borders utilizing active Monet system accent colors.
-- **AMOLED Dark Theme Depth**: Surfaces are styled with rich, extremely dark obsidian tones (rather than flat black) to give clear elevation layout borders and shape definitions under dark theme, while keeping the main background solid pitch-black.
+#### Fixes
+- **Resolved Buffer Leak Panic Crash**: Fixed a native crash (`panic: leaking buffer`) in the `packetConnectionCopy` routine within the `libbox` core. Recompiled the Go core module without debug assertions, allowing it to gracefully release buffers under low-memory or high-latency network conditions (such as switching from Wi-Fi to mobile data) rather than terminating the VPN service.
 
 ---
 
