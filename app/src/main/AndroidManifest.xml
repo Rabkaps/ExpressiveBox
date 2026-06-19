@@ -32,6 +32,14 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".ui.main.NodesPopupActivity"
+            android:theme="@style/Theme.ExpressiveBox.Dialog"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:launchMode="singleInstance"
+            android:exported="false" />
+
         <service
             android:name=".vpn.VpnServiceWrapper"
             android:permission="android.permission.BIND_VPN_SERVICE"

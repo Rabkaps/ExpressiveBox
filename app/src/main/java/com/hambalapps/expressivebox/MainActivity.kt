@@ -15,6 +15,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
 import com.hambalapps.expressivebox.theme.ExpressiveBoxTheme
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import com.hambalapps.expressivebox.vpn.VpnServiceWrapper
 import com.hambalapps.expressivebox.data.SettingsManager
 import com.google.android.material.color.DynamicColors
@@ -70,6 +71,7 @@ class MainActivity : ComponentActivity() {
 
     enableEdgeToEdge()
     setContent {
+      @OptIn(ExperimentalMaterial3ExpressiveApi::class)
       ExpressiveBoxTheme { Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) { MainNavigation() } }
     }
   }

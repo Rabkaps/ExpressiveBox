@@ -32,11 +32,16 @@ class SettingsManager(private val context: Context) {
         val SPLIT_TUNNELING_APPS = stringSetPreferencesKey("split_tunneling_apps")
         val MANUAL_SERVERS = stringPreferencesKey("manual_servers")
         val SPECIAL_THEME = stringPreferencesKey("special_theme")
+        val THEME_MODE = stringPreferencesKey("theme_mode")
+        val CARD_STYLE = stringPreferencesKey("card_style")
         val BYPASS_LAN = booleanPreferencesKey("bypass_lan")
         val AUTO_UPDATE_SUBS = booleanPreferencesKey("auto_update_subs")
         val AUTO_UPDATE_INTERVAL = stringPreferencesKey("auto_update_interval")
         val LAST_SUBS_UPDATE_TIME = longPreferencesKey("last_subs_update_time")
+        val AUTO_CONNECT_SUBS = stringSetPreferencesKey("auto_connect_subs")
         
+        private val defaultThemeKey = if (Config.IS_SPECIAL) "cherry_blossom" else "dynamic"
+
         val defaultSettings = UserSettings(
             isAdvancedMode = false,
             bypassIran = true,
@@ -51,16 +56,19 @@ class SettingsManager(private val context: Context) {
             subscriptionServers = "",
             subscriptionList = "",
             activeSubId = "",
-            showLiveNotification = true,
+            showLiveNotification = false,
             splitTunnelingEnabled = false,
             splitTunnelingMode = "bypass",
             splitTunnelingApps = emptySet(),
             manualServers = "",
-            specialTheme = "cherry_blossom",
+            specialTheme = defaultThemeKey,
+            themeMode = "system",
+            cardStyle = "glass",
             bypassLan = true,
             autoUpdateSubs = true,
             autoUpdateInterval = "daily",
             lastSubsUpdateTime = 0L,
+            autoConnectSubs = emptySet(),
             deserializedSubscriptions = emptyList()
         )
     }
@@ -102,16 +110,19 @@ class SettingsManager(private val context: Context) {
             subscriptionServers = prefs[SUBSCRIPTION_SERVERS] ?: "",
             subscriptionList = listStr,
             activeSubId = prefs[ACTIVE_SUB_ID] ?: "",
-            showLiveNotification = prefs[SHOW_LIVE_NOTIFICATION] ?: true,
+            showLiveNotification = prefs[SHOW_LIVE_NOTIFICATION] ?: false,
             splitTunnelingEnabled = prefs[SPLIT_TUNNELING_ENABLED] ?: false,
             splitTunnelingMode = prefs[SPLIT_TUNNELING_MODE] ?: "bypass",
             splitTunnelingApps = prefs[SPLIT_TUNNELING_APPS] ?: emptySet(),
             manualServers = manualStr,
-            specialTheme = prefs[SPECIAL_THEME] ?: "cherry_blossom",
+            specialTheme = prefs[SPECIAL_THEME] ?: defaultThemeKey,
+            themeMode = prefs[THEME_MODE] ?: "system",
+            cardStyle = prefs[CARD_STYLE] ?: "glass",
             bypassLan = prefs[BYPASS_LAN] ?: true,
             autoUpdateSubs = prefs[AUTO_UPDATE_SUBS] ?: true,
             autoUpdateInterval = prefs[AUTO_UPDATE_INTERVAL] ?: "daily",
             lastSubsUpdateTime = prefs[LAST_SUBS_UPDATE_TIME] ?: 0L,
+            autoConnectSubs = prefs[AUTO_CONNECT_SUBS] ?: emptySet(),
             deserializedSubscriptions = deserialized
         )
     }.distinctUntilChanged()
@@ -129,12 +140,14 @@ class SettingsManager(private val context: Context) {
     val subscriptionServers: Flow<String> = context.dataStore.data.map { it[SUBSCRIPTION_SERVERS] ?: "" }.distinctUntilChanged()
     val subscriptionList: Flow<String> = context.dataStore.data.map { it[SUBSCRIPTION_LIST] ?: "" }.distinctUntilChanged()
     val activeSubId: Flow<String> = context.dataStore.data.map { it[ACTIVE_SUB_ID] ?: "" }.distinctUntilChanged()
-    val showLiveNotification: Flow<Boolean> = context.dataStore.data.map { it[SHOW_LIVE_NOTIFICATION] ?: true }.distinctUntilChanged()
+    val showLiveNotification: Flow<Boolean> = context.dataStore.data.map { it[SHOW_LIVE_NOTIFICATION] ?: false }.distinctUntilChanged()
     val splitTunnelingEnabled: Flow<Boolean> = context.dataStore.data.map { it[SPLIT_TUNNELING_ENABLED] ?: false }.distinctUntilChanged()
     val splitTunnelingMode: Flow<String> = context.dataStore.data.map { it[SPLIT_TUNNELING_MODE] ?: "bypass" }.distinctUntilChanged()
     val splitTunnelingApps: Flow<Set<String>> = context.dataStore.data.map { it[SPLIT_TUNNELING_APPS] ?: emptySet() }.distinctUntilChanged()
     val manualServers: Flow<String> = context.dataStore.data.map { it[MANUAL_SERVERS] ?: "" }.distinctUntilChanged()
-    val specialTheme: Flow<String> = context.dataStore.data.map { it[SPECIAL_THEME] ?: "cherry_blossom" }.distinctUntilChanged()
+    val specialTheme: Flow<String> = context.dataStore.data.map { it[SPECIAL_THEME] ?: defaultThemeKey }.distinctUntilChanged()
+    val themeMode: Flow<String> = context.dataStore.data.map { it[THEME_MODE] ?: "system" }.distinctUntilChanged()
+    val cardStyle: Flow<String> = context.dataStore.data.map { it[CARD_STYLE] ?: "glass" }.distinctUntilChanged()
     val bypassLan: Flow<Boolean> = context.dataStore.data.map { it[BYPASS_LAN] ?: true }.distinctUntilChanged()
     val autoUpdateSubs: Flow<Boolean> = context.dataStore.data.map { it[AUTO_UPDATE_SUBS] ?: true }.distinctUntilChanged()
     val autoUpdateInterval: Flow<String> = context.dataStore.data.map { it[AUTO_UPDATE_INTERVAL] ?: "daily" }.distinctUntilChanged()
@@ -159,10 +172,25 @@ class SettingsManager(private val context: Context) {
     suspend fun setSplitTunnelingApps(value: Set<String>) { context.dataStore.edit { it[SPLIT_TUNNELING_APPS] = value } }
     suspend fun setManualServers(value: String) { context.dataStore.edit { it[MANUAL_SERVERS] = value } }
     suspend fun setSpecialTheme(value: String) { context.dataStore.edit { it[SPECIAL_THEME] = value } }
+    suspend fun setThemeMode(value: String) { context.dataStore.edit { it[THEME_MODE] = value } }
+    suspend fun setCardStyle(value: String) { context.dataStore.edit { it[CARD_STYLE] = value } }
     suspend fun setBypassLan(value: Boolean) { context.dataStore.edit { it[BYPASS_LAN] = value } }
     suspend fun setAutoUpdateSubs(value: Boolean) { context.dataStore.edit { it[AUTO_UPDATE_SUBS] = value } }
     suspend fun setAutoUpdateInterval(value: String) { context.dataStore.edit { it[AUTO_UPDATE_INTERVAL] = value } }
     suspend fun setLastSubsUpdateTime(value: Long) { context.dataStore.edit { it[LAST_SUBS_UPDATE_TIME] = value } }
+
+    val autoConnectSubs: Flow<Set<String>> = context.dataStore.data.map { it[AUTO_CONNECT_SUBS] ?: emptySet() }.distinctUntilChanged()
+
+    suspend fun toggleAutoConnectSub(subId: String) {
+        context.dataStore.edit { prefs ->
+            val current = prefs[AUTO_CONNECT_SUBS] ?: emptySet()
+            if (current.contains(subId)) {
+                prefs[AUTO_CONNECT_SUBS] = current - subId
+            } else {
+                prefs[AUTO_CONNECT_SUBS] = current + subId
+            }
+        }
+    }
 }
 
 data class UserSettings(
@@ -185,10 +213,13 @@ data class UserSettings(
     val splitTunnelingApps: Set<String>,
     val manualServers: String,
     val specialTheme: String,
+    val themeMode: String,
+    val cardStyle: String,
     val bypassLan: Boolean,
     val autoUpdateSubs: Boolean,
     val autoUpdateInterval: String,
     val lastSubsUpdateTime: Long,
+    val autoConnectSubs: Set<String>,
     val deserializedSubscriptions: List<Subscription>
 )
 

@@ -21,6 +21,8 @@ import androidx.compose.material.icons.filled.FlashOff
 import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.res.stringResource
+import com.hambalapps.expressivebox.R
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -93,14 +95,14 @@ fun QrScannerScreen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "Camera Permission Required",
+                    text = stringResource(R.string.cam_perm_req),
                     style = MaterialTheme.typography.titleLarge,
                     color = Color.White,
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "This app requires camera access to scan QR codes for importing configurations.",
+                    text = stringResource(R.string.cam_perm_desc),
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color.LightGray,
                     modifier = Modifier.padding(horizontal = 16.dp)
@@ -110,11 +112,11 @@ fun QrScannerScreen(
                     onClick = { launcher.launch(Manifest.permission.CAMERA) },
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text("Grant Permission")
+                    Text(stringResource(R.string.grant_perm))
                 }
                 Spacer(modifier = Modifier.height(12.dp))
                 TextButton(onClick = onClose) {
-                    Text("Cancel", color = Color.White)
+                    Text(stringResource(R.string.cancel), color = Color.White)
                 }
             }
         }
@@ -189,7 +191,7 @@ fun CameraPreviewScanner(
                         flashEnabled = !flashEnabled
                         currentCamera.cameraControl.enableTorch(flashEnabled)
                     } else {
-                        Toast.makeText(context, "Flash not available", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, context.getString(R.string.flash_not_avail), Toast.LENGTH_SHORT).show()
                     }
                 },
                 colors = IconButtonDefaults.iconButtonColors(
@@ -261,7 +263,7 @@ fun CameraPreviewScanner(
                     imageAnalysis
                 )
             } catch (exc: Exception) {
-                Toast.makeText(context, "Use camera failed: ${exc.message}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, context.getString(R.string.use_cam_fail, exc.message), Toast.LENGTH_SHORT).show()
             }
         }
     }

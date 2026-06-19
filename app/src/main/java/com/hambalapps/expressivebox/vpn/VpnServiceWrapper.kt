@@ -10,7 +10,12 @@ import android.os.Build
 import android.os.ParcelFileDescriptor
 import androidx.core.app.NotificationCompat
 import com.hambalapps.expressivebox.MainActivity
+import com.hambalapps.expressivebox.R
 import com.hambalapps.expressivebox.data.SettingsManager
+import com.hambalapps.expressivebox.ui.main.NodesPopupActivity
+import com.hambalapps.expressivebox.data.deserializeSubscriptions
+import com.hambalapps.expressivebox.data.Subscription
+import com.hambalapps.expressivebox.Config
 import io.nekohasekai.libbox.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,7 +29,7 @@ class VpnServiceWrapper : VpnService(), PlatformInterface, CommandServerHandler 
     companion object {
         const val ACTION_START = "com.hambalapps.expressivebox.START"
         const val ACTION_STOP = "com.hambalapps.expressivebox.STOP"
-        private const val CHANNEL_ID = "vpn_service_channel"
+        private const val CHANNEL_ID = "vpn_service_channel_v2"
         private const val NOTIFICATION_ID = 101
 
         private val _vpnState = MutableStateFlow("DISCONNECTED")
@@ -160,7 +165,7 @@ class VpnServiceWrapper : VpnService(), PlatformInterface, CommandServerHandler 
                 val scheme = link.substringBefore("://").uppercase()
                 "$scheme ($host)"
             } catch (e: Exception) {
-                "Unnamed Node"
+                getString(R.string.notif_unnamed)
             }
         }
     }
@@ -169,18 +174,18 @@ class VpnServiceWrapper : VpnService(), PlatformInterface, CommandServerHandler 
         val settingsManager = SettingsManager(applicationContext)
         val activeProfile = runBlocking { settingsManager.activeProfile.first() }
         val nodeName = if (activeProfile.isEmpty()) {
-            "No Node Selected"
+            getString(R.string.notif_no_node)
         } else if (activeProfile.startsWith("{")) {
-            "Custom Config"
+            getString(R.string.notif_custom)
         } else {
             getProxyName(activeProfile)
         }
         
         val contentText = when (state) {
-            "CONNECTED" -> "Connected: $nodeName"
-            "CONNECTING" -> "Connecting to $nodeName..."
-            "DISCONNECTING" -> "Disconnecting..."
-            else -> "Disconnected"
+            "CONNECTED" -> getString(R.string.notif_connected, nodeName)
+            "CONNECTING" -> getString(R.string.notif_connecting, nodeName)
+            "DISCONNECTING" -> getString(R.string.notif_disconnecting)
+            else -> getString(R.string.notif_disconnected)
         }
         
         val intent = Intent(applicationContext, MainActivity::class.java)
@@ -213,6 +218,17 @@ class VpnServiceWrapper : VpnService(), PlatformInterface, CommandServerHandler 
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
         
+        // List Intent targeting translucent Dialog NodesPopupActivity
+        val listIntent = Intent(applicationContext, NodesPopupActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val listPendingIntent = PendingIntent.getActivity(
+            applicationContext,
+            4,
+            listIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        
         // Disconnect Intent
         val stopIntent = Intent(applicationContext, VpnServiceWrapper::class.java).apply {
             action = ACTION_STOP
@@ -226,29 +242,35 @@ class VpnServiceWrapper : VpnService(), PlatformInterface, CommandServerHandler 
         
         val prevAction = NotificationCompat.Action.Builder(
             android.R.drawable.ic_media_previous,
-            "Prev",
+            getString(R.string.notif_action_prev),
             prevPendingIntent
         ).build()
         
         val nextAction = NotificationCompat.Action.Builder(
             android.R.drawable.ic_media_next,
-            "Next",
+            getString(R.string.notif_action_next),
             nextPendingIntent
         ).build()
         
         val disconnectAction = NotificationCompat.Action.Builder(
             android.R.drawable.ic_menu_close_clear_cancel,
-            "Disconnect",
+            getString(R.string.notif_action_disconnect),
             stopPendingIntent
+        ).build()
+        
+        val listAction = NotificationCompat.Action.Builder(
+            android.R.drawable.ic_menu_agenda,
+            getString(R.string.notif_action_list),
+            listPendingIntent
         ).build()
         
         val showLiveNotif = runBlocking { settingsManager.showLiveNotification.first() }
         
         val channelToUse = if (showLiveNotif) "vpn_service_channel_live" else CHANNEL_ID
-        val priority = if (showLiveNotif) NotificationCompat.PRIORITY_DEFAULT else NotificationCompat.PRIORITY_LOW
+        val priority = NotificationCompat.PRIORITY_DEFAULT
         
         val notificationBuilder = NotificationCompat.Builder(applicationContext, channelToUse)
-            .setContentTitle("ExpressiveBox VPN")
+            .setContentTitle(getString(R.string.app_name))
             .setContentText(contentText)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentIntent(pendingIntent)
@@ -259,9 +281,9 @@ class VpnServiceWrapper : VpnService(), PlatformInterface, CommandServerHandler 
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             
         if (showLiveNotif) {
-            notificationBuilder.addAction(prevAction)
             notificationBuilder.addAction(nextAction)
         }
+        notificationBuilder.addAction(listAction)
         notificationBuilder.addAction(disconnectAction)
             
         if (showLiveNotif) {
@@ -269,10 +291,10 @@ class VpnServiceWrapper : VpnService(), PlatformInterface, CommandServerHandler 
             val shortText = when (state) {
                 "CONNECTED" -> {
                     val shortNode = nodeName.substringBefore(" ").take(7)
-                    shortNode.ifEmpty { "Active" }
+                    shortNode.ifEmpty { getString(R.string.active_node) }
                 }
-                "CONNECTING" -> "Connect..."
-                else -> "VPN"
+                "CONNECTING" -> getString(R.string.state_connecting)
+                else -> getString(R.string.app_name)
             }
             notificationBuilder.extras.putCharSequence("android.shortCriticalText", shortText)
         }
@@ -322,14 +344,18 @@ class VpnServiceWrapper : VpnService(), PlatformInterface, CommandServerHandler 
             
             val channelLow = NotificationChannel(
                 CHANNEL_ID,
-                "VPN Connection Status",
-                NotificationManager.IMPORTANCE_LOW
-            )
+                getString(R.string.notif_chan_status),
+                NotificationManager.IMPORTANCE_DEFAULT
+            ).apply {
+                setSound(null, null)
+                enableVibration(false)
+                enableLights(false)
+            }
             manager?.createNotificationChannel(channelLow)
             
             val channelLive = NotificationChannel(
                 "vpn_service_channel_live",
-                "VPN Live Status Indicator",
+                getString(R.string.notif_chan_live),
                 NotificationManager.IMPORTANCE_DEFAULT
             ).apply {
                 setSound(null, null)
@@ -348,8 +374,51 @@ class VpnServiceWrapper : VpnService(), PlatformInterface, CommandServerHandler 
                 copyDatabasesFromAssets()
                 val settingsManager = SettingsManager(applicationContext)
                 
+                val activeSubId = settingsManager.activeSubId.first()
+                val autoConnectSubs = settingsManager.autoConnectSubs.first()
+                var rawProfile = settingsManager.activeProfile.first()
+
+                if (autoConnectSubs.contains(activeSubId)) {
+                    log("Auto-Connect is enabled for active subscription. Finding best node...")
+                    val subscriptionListStr = settingsManager.subscriptionList.first()
+                    val subscriptions = deserializeSubscriptions(subscriptionListStr)
+                    val activeSub = subscriptions.find { it.id == activeSubId }
+                        ?: if (activeSubId == "manual") {
+                            val manualStr = settingsManager.manualServers.first()
+                            Subscription(id = "manual", name = "Manual", url = "local://manual", servers = manualStr)
+                        } else if (activeSubId == "special_default") {
+                            Subscription(id = "special_default", name = "Dedicated", url = "local://special_default", servers = Config.DEFAULT_PROFILE)
+                        } else null
+                    
+                    val servers = activeSub?.servers?.split("\n")?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()
+                    if (servers.isNotEmpty()) {
+                        log("Pinging ${servers.size} servers in parallel...")
+                        val jobs = servers.map { server ->
+                            async(Dispatchers.IO) {
+                                val hostPort = getHostAndPortFromLink(server)
+                                val delay = if (hostPort != null) {
+                                    measurePingDelay(hostPort.first, hostPort.second)
+                                } else {
+                                    -1
+                                }
+                                server to delay
+                            }
+                        }
+                        val results = jobs.awaitAll()
+                        val bestServer = results.filter { it.second >= 0 }.minByOrNull { it.second }
+                        if (bestServer != null) {
+                            log("Selected best server: ${getProxyName(bestServer.first)} with delay ${bestServer.second} ms")
+                            settingsManager.setActiveProfile(bestServer.first)
+                            rawProfile = bestServer.first
+                        } else {
+                            log("All pings timed out. Using default active profile.")
+                        }
+                    } else {
+                        log("No servers available for Auto-Connect.")
+                    }
+                }
+                
                 // Read configurations from Preferences DataStore
-                val rawProfile = settingsManager.activeProfile.first()
                 val bypassIranVal = settingsManager.bypassIran.first()
                 val secureDnsVal = settingsManager.secureDns.first()
                 val tunStackVal = settingsManager.tunStack.first()

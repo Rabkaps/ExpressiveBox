@@ -18,8 +18,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.LoadingIndicator
+import androidx.compose.material3.CircularWavyProgressIndicator
 import androidx.compose.runtime.*
+import androidx.compose.ui.res.stringResource
+import com.hambalapps.expressivebox.R
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -119,10 +121,10 @@ fun SplitTunnelingScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Split Tunneling", fontWeight = FontWeight.Bold) },
+                title = { Text(stringResource(R.string.split_tunneling), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(imageVector = Icons.Default.ArrowBack, contentDescription = stringResource(R.string.back))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -157,12 +159,12 @@ fun SplitTunnelingScreen(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Enable Split Tunneling",
+                            text = stringResource(R.string.enable_split),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "Control which applications route via VPN",
+                            text = stringResource(R.string.split_desc),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -212,7 +214,7 @@ fun SplitTunnelingScreen(
                                     }
                                 }
                             },
-                            label = { Text("Bypass Selected Apps", fontSize = 12.sp) },
+                            label = { Text(stringResource(R.string.bypass_apps), fontSize = 12.sp) },
                             modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(12.dp)
                         )
@@ -229,7 +231,7 @@ fun SplitTunnelingScreen(
                                     }
                                 }
                             },
-                            label = { Text("Route Only Selected Apps", fontSize = 12.sp) },
+                            label = { Text(stringResource(R.string.route_apps), fontSize = 12.sp) },
                             modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(12.dp)
                         )
@@ -242,7 +244,7 @@ fun SplitTunnelingScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 8.dp),
-                        placeholder = { Text("Search apps...") },
+                        placeholder = { Text(stringResource(R.string.search_apps)) },
                         leadingIcon = { Icon(imageVector = Icons.Default.Search, contentDescription = null) },
                         trailingIcon = {
                             if (searchQuery.isNotEmpty()) {
@@ -264,7 +266,7 @@ fun SplitTunnelingScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Show System Apps",
+                            text = stringResource(R.string.show_system),
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -287,7 +289,7 @@ fun SplitTunnelingScreen(
                         .weight(1f),
                     contentAlignment = Alignment.Center
                 ) {
-                    LoadingIndicator(
+                    CircularWavyProgressIndicator(
                         modifier = Modifier.size(48.dp),
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -322,7 +324,7 @@ fun SplitTunnelingScreen(
                                         }
                                     }
                                 }
-                                .padding(12.dp),
+                                .padding(16.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             if (app.icon != null) {

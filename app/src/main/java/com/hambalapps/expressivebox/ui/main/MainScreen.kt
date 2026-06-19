@@ -19,6 +19,8 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.res.stringResource
+import com.hambalapps.expressivebox.R
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -34,6 +36,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -49,8 +52,13 @@ import com.hambalapps.expressivebox.data.Subscription
 import com.hambalapps.expressivebox.data.serializeSubscriptions
 import com.hambalapps.expressivebox.data.deserializeSubscriptions
 import com.hambalapps.expressivebox.vpn.VpnServiceWrapper
+import com.hambalapps.expressivebox.vpn.measurePingDelay
+import com.hambalapps.expressivebox.vpn.getHostAndPortFromLink
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.Dispatchers
 import kotlin.math.cos
 import kotlin.math.sin
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -61,13 +69,27 @@ import androidx.compose.material3.CircularWavyProgressIndicator
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import com.hambalapps.expressivebox.Config
 
 // Expressive shapes defining Material 3 Expressive aesthetics
 private val ExpressiveCardShape = RoundedCornerShape(topStart = 32.dp, bottomEnd = 32.dp, topEnd = 8.dp, bottomStart = 8.dp)
 private val ExpressiveButtonShape = RoundedCornerShape(topStart = 16.dp, bottomEnd = 16.dp, topEnd = 4.dp, bottomStart = 4.dp)
 private val ExpressiveChipShape = RoundedCornerShape(topStart = 8.dp, bottomEnd = 8.dp, topEnd = 2.dp, bottomStart = 2.dp)
+
+private fun compositeColor(foreground: Color, background: Color): Color {
+    val alpha = foreground.alpha
+    return Color(
+        red = foreground.red * alpha + background.red * (1f - alpha),
+        green = foreground.green * alpha + background.green * (1f - alpha),
+        blue = foreground.blue * alpha + background.blue * (1f - alpha),
+        alpha = 1f
+    )
+}
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -81,6 +103,7 @@ fun MainScreen(
 
     // Observe settings from DataStore
     val settings by settingsManager.settings.collectAsStateWithLifecycle(initialValue = SettingsManager.defaultSettings)
+    val cardStyle = settings.cardStyle
     val isAdvancedMode = settings.isAdvancedMode
     val bypassIran = settings.bypassIran
     val bypassLan = settings.bypassLan
@@ -102,10 +125,15 @@ fun MainScreen(
     val autoUpdateSubs = settings.autoUpdateSubs
     val autoUpdateInterval = settings.autoUpdateInterval
     val lastSubsUpdateTime = settings.lastSubsUpdateTime
+    val autoConnectSubs = settings.autoConnectSubs
 
     val subscriptions = settings.deserializedSubscriptions
     val activeSubscription = remember(subscriptions, activeSubId) {
         subscriptions.find { it.id == activeSubId } ?: subscriptions.firstOrNull()
+    }
+
+    val serverList = remember(activeSubscription) {
+        activeSubscription?.servers?.split("\n")?.filter { it.isNotEmpty() } ?: emptyList()
     }
 
     var showLivePromoGuide by remember { mutableStateOf(false) }
@@ -215,7 +243,7 @@ fun MainScreen(
     var showImportDialog by remember { mutableStateOf(false) }
     var importText by remember { mutableStateOf("") }
     var showLogs by remember { mutableStateOf(false) }
-    var activeBottomTab by remember { mutableIntStateOf(0) }
+    val pagerState = rememberPagerState(pageCount = { 4 })
     var isFetching by remember { mutableStateOf(false) }
     var fetchError by remember { mutableStateOf<String?>(null) }
     var subUrlInput by remember { mutableStateOf("") }
@@ -227,6 +255,25 @@ fun MainScreen(
     var selectedTab by remember { mutableStateOf(0) }
     var pingsMap by remember { mutableStateOf(mapOf<String, Int>()) }
     var isTestingPings by remember { mutableStateOf(false) }
+
+    val filteredServerList = remember(serverList, searchQuery, selectedTab) {
+        serverList.mapNotNull { serverLink ->
+            val type = serverLink.substringBefore("://").uppercase()
+            val matchesTab = when (selectedTab) {
+                0 -> true
+                1 -> type == "VLESS"
+                2 -> type == "TROJAN"
+                3 -> type == "SS" || type == "SHADOWSOCKS"
+                else -> true
+            }
+            if (matchesTab) {
+                val name = getProxyName(serverLink, context)
+                if (name.contains(searchQuery, ignoreCase = true)) {
+                    ServerItem(link = serverLink, name = name, type = type)
+                } else null
+            } else null
+        }
+    }
 
     var showLoveNoteDialog by remember { mutableStateOf(false) }
     var currentLoveNote by remember { mutableStateOf("") }
@@ -241,6 +288,14 @@ fun MainScreen(
     var editCreds by remember { mutableStateOf("") }
     var editTls by remember { mutableStateOf(false) }
     var editSni by remember { mutableStateOf("") }
+    var editShowAdvanced by remember { mutableStateOf(false) }
+    var editTransportType by remember { mutableStateOf("tcp") }
+    var editTransportPath by remember { mutableStateOf("") }
+    var editTransportHost by remember { mutableStateOf("") }
+    var editTransportServiceName by remember { mutableStateOf("") }
+    var editTransportSeed by remember { mutableStateOf("") }
+    var editTransportHeaderType by remember { mutableStateOf("none") }
+    var isNodesExpanded by remember { mutableStateOf(false) }
 
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val refreshingSubs = remember { mutableStateMapOf<String, Boolean>() }
@@ -254,16 +309,125 @@ fun MainScreen(
         }
     }
 
-    val isDark = isSystemInDarkTheme()
+    val isDark = when (settings.themeMode) {
+        "light" -> false
+        "dark" -> true
+        else -> isSystemInDarkTheme()
+    }
+    val cardBackground = if (isDark) Color.Black else Color(0xFFF7F9FB)
     val primaryColor = MaterialTheme.colorScheme.primary
     val secondaryColor = MaterialTheme.colorScheme.secondary
-    val cardBorderBrush = remember(isDark, primaryColor, secondaryColor) {
-        Brush.linearGradient(
-            colors = listOf(
-                primaryColor.copy(alpha = if (isDark) 0.22f else 0.18f),
-                secondaryColor.copy(alpha = if (isDark) 0.08f else 0.06f)
+    val tertiaryColor = MaterialTheme.colorScheme.tertiary
+    val surfaceContainerHigh = MaterialTheme.colorScheme.surfaceContainerHigh
+    val surfaceContainer = MaterialTheme.colorScheme.surfaceContainer
+    val surfaceContainerLow = MaterialTheme.colorScheme.surfaceContainerLow
+    val primaryContainer = MaterialTheme.colorScheme.primaryContainer
+    val outlineVariant = MaterialTheme.colorScheme.outlineVariant
+
+    val cardBorderBrush = remember(isDark, cardStyle, primaryColor, secondaryColor, outlineVariant) {
+        if (cardStyle == "solid") {
+            SolidColor(outlineVariant)
+        } else {
+            val colors = listOf(
+                primaryColor.copy(alpha = if (isDark) 0.60f else 0.18f),
+                secondaryColor.copy(alpha = if (isDark) 0.40f else 0.06f)
             )
-        )
+            Brush.linearGradient(colors = colors)
+        }
+    }
+
+    val primaryCardBrush = remember(isDark, cardStyle, primaryColor, secondaryColor, surfaceContainerHigh) {
+        if (cardStyle == "solid") {
+            SolidColor(surfaceContainerHigh)
+        } else {
+            val colors = if (isDark) {
+                listOf(
+                    primaryColor.copy(alpha = 0.55f),
+                    secondaryColor.copy(alpha = 0.28f)
+                )
+            } else {
+                listOf(
+                    primaryColor.copy(alpha = 0.18f),
+                    surfaceContainerHigh
+                )
+            }
+            Brush.linearGradient(colors = colors)
+        }
+    }
+
+    val secondaryCardBrush = remember(isDark, cardStyle, secondaryColor, tertiaryColor, surfaceContainer) {
+        if (cardStyle == "solid") {
+            SolidColor(surfaceContainer)
+        } else {
+            val colors = if (isDark) {
+                listOf(
+                    secondaryColor.copy(alpha = 0.55f),
+                    tertiaryColor.copy(alpha = 0.28f)
+                )
+            } else {
+                listOf(
+                    secondaryColor.copy(alpha = 0.18f),
+                    surfaceContainerHigh
+                )
+            }
+            Brush.linearGradient(colors = colors)
+        }
+    }
+
+    val tertiaryCardBrush = remember(isDark, cardStyle, tertiaryColor, primaryColor, surfaceContainerLow) {
+        if (cardStyle == "solid") {
+            SolidColor(surfaceContainerLow)
+        } else {
+            val colors = if (isDark) {
+                listOf(
+                    tertiaryColor.copy(alpha = 0.55f),
+                    primaryColor.copy(alpha = 0.28f)
+                )
+            } else {
+                listOf(
+                    tertiaryColor.copy(alpha = 0.18f),
+                    surfaceContainerHigh
+                )
+            }
+            Brush.linearGradient(colors = colors)
+        }
+    }
+
+    // Active Card background animation (alive and pulsing flow)
+    val infiniteTransition = rememberInfiniteTransition(label = "ActiveCardTransition")
+    val flowOffset by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1000f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 6000, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "flowOffset"
+    )
+
+    val activeCardBackgroundBrush = remember(isDark, cardStyle, primaryColor, secondaryColor, tertiaryColor, primaryContainer, flowOffset) {
+        if (cardStyle == "solid") {
+            SolidColor(primaryContainer)
+        } else {
+            val colors = if (isDark) {
+                listOf(
+                    primaryColor.copy(alpha = 0.68f),
+                    secondaryColor.copy(alpha = 0.50f),
+                    tertiaryColor.copy(alpha = 0.30f)
+                )
+            } else {
+                listOf(
+                    primaryColor.copy(alpha = 0.25f),
+                    secondaryColor.copy(alpha = 0.15f),
+                    Color.White
+                )
+            }
+            Brush.linearGradient(
+                colors = colors,
+                start = Offset(flowOffset - 500f, 0f),
+                end = Offset(flowOffset + 500f, 1000f)
+            )
+        }
     }
 
     ModalNavigationDrawer(
@@ -331,7 +495,7 @@ fun MainScreen(
                     Spacer(modifier = Modifier.height(24.dp))
                     
                     Text(
-                        text = if (Config.IS_SPECIAL) "Expressive Box Special Edition" else "Expressive Box Standard",
+                        text = if (Config.IS_SPECIAL) stringResource(R.string.app_name_special) else stringResource(R.string.app_name_standard),
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -341,7 +505,7 @@ fun MainScreen(
                     
                     Text(
                         text = if (Config.IS_SPECIAL) "Developed with love by Gumball for Sana. Featuring a custom reactive visualizer, Monet adaptive themes, and stable key signing." 
-                               else "A professional, material design security client featuring ultra-low latency background service, native M3 expressive widgets, and custom rule-based routing.",
+                               else stringResource(R.string.app_desc),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center,
@@ -364,7 +528,7 @@ fun MainScreen(
                         )
                     } else {
                         Text(
-                            text = "Secure Network Engine",
+                            text = stringResource(R.string.secure_network_engine),
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                             fontWeight = FontWeight.Bold
@@ -415,7 +579,7 @@ fun MainScreen(
                             IconButton(onClick = { scope.launch { drawerState.open() } }) {
                                 Icon(
                                     imageVector = Icons.Default.Menu,
-                                    contentDescription = "Open Settings Drawer",
+                                    contentDescription = stringResource(R.string.open_settings_drawer),
                                     tint = MaterialTheme.colorScheme.onSurface
                                 )
                             }
@@ -424,11 +588,11 @@ fun MainScreen(
                             containerColor = Color.Transparent
                         ),
                         actions = {
-                            IconButton(onClick = { activeBottomTab = 2 }) {
+                            IconButton(onClick = { scope.launch { pagerState.animateScrollToPage(2) } }) {
                                 Icon(
                                     imageVector = Icons.Default.Terminal,
-                                    contentDescription = "Show Logs",
-                                    tint = if (activeBottomTab == 2) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                    contentDescription = stringResource(R.string.show_logs),
+                                    tint = if (pagerState.targetPage == 2) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                                 )
                             }
                         }
@@ -452,14 +616,14 @@ fun MainScreen(
                     tonalElevation = 8.dp
                 ) {
                     listOf(
-                        Triple(0, "Home", Icons.Default.Home),
-                        Triple(1, "Servers", Icons.Default.Dns),
-                        Triple(2, "Logs", Icons.Default.Terminal),
-                        Triple(3, "Settings", Icons.Default.Settings)
+                        Triple(0, stringResource(R.string.tab_home), Icons.Default.Home),
+                        Triple(1, stringResource(R.string.tab_servers), Icons.Default.Dns),
+                        Triple(2, stringResource(R.string.tab_logs), Icons.Default.Terminal),
+                        Triple(3, stringResource(R.string.tab_settings), Icons.Default.Settings)
                     ).forEach { (tabId, label, icon) ->
                         NavigationBarItem(
-                            selected = activeBottomTab == tabId,
-                            onClick = { activeBottomTab = tabId },
+                            selected = pagerState.targetPage == tabId,
+                            onClick = { scope.launch { pagerState.animateScrollToPage(tabId) } },
                             icon = { Icon(icon, contentDescription = label) },
                             label = { Text(label, style = MaterialTheme.typography.labelSmall) }
                         )
@@ -467,12 +631,29 @@ fun MainScreen(
                 }
             }
         ) { innerPadding ->
+
             Box(
                 modifier = modifier
                     .fillMaxSize()
                     .padding(innerPadding)
             ) {
-                when (activeBottomTab) {
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier.fillMaxSize()
+                ) { pageIndex ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                val pageOffset = (pagerState.currentPage - pageIndex) + pagerState.currentPageOffsetFraction
+                                val scale = 0.92f + (1f - 0.92f) * (1f - kotlin.math.abs(pageOffset).coerceIn(0f, 1f))
+                                val alpha = 0.5f + (1f - 0.5f) * (1f - kotlin.math.abs(pageOffset).coerceIn(0f, 1f))
+                                this.scaleX = scale
+                                this.scaleY = scale
+                                this.alpha = alpha
+                            }
+                    ) {
+                        when (pageIndex) {
                     0 -> { // Home Tab
                         Column(
                             modifier = Modifier
@@ -485,6 +666,8 @@ fun MainScreen(
 
                             ConnectionDashboard(
                                 state = vpnState,
+                                cardStyle = cardStyle,
+                                isDark = isDark,
                                 onConnectToggle = {
                                     if (vpnState == "CONNECTED") {
                                         stopVpnService(context)
@@ -512,21 +695,25 @@ fun MainScreen(
                                 Card(
                                     modifier = Modifier
                                         .fillMaxWidth()
+                                        .background(
+                                            brush = if (vpnState == "CONNECTED" || vpnState == "CONNECTING") activeCardBackgroundBrush else primaryCardBrush,
+                                            shape = ExpressiveCardShape
+                                        )
                                         .border(
                                             width = 1.dp,
                                             brush = cardBorderBrush,
                                             shape = ExpressiveCardShape
                                         )
-                                        .clickable { activeBottomTab = 1 }
+                                        .clickable { scope.launch { pagerState.animateScrollToPage(1) } }
                                         .pressScaleEffect(),
                                     shape = ExpressiveCardShape,
                                     colors = CardDefaults.cardColors(
-                                        containerColor = MaterialTheme.colorScheme.surface
+                                        containerColor = Color.Transparent
                                     )
                                 ) {
                                     Column(modifier = Modifier.padding(20.dp)) {
                                         Text(
-                                            text = "Active Node",
+                                            text = stringResource(R.string.active_node),
                                             fontWeight = FontWeight.Bold,
                                             style = MaterialTheme.typography.titleMedium,
                                             color = MaterialTheme.colorScheme.onSurface
@@ -563,7 +750,7 @@ fun MainScreen(
                                                 Spacer(modifier = Modifier.width(12.dp))
                                                 Column(modifier = Modifier.weight(1f)) {
                                                     Text(
-                                                        text = if (activeProfile.startsWith("{")) "Custom JSON Config" else getProxyName(activeProfile),
+                                                        text = if (activeProfile.startsWith("{")) stringResource(R.string.custom_json) else getProxyName(activeProfile, context),
                                                         style = MaterialTheme.typography.bodyMedium,
                                                         fontWeight = FontWeight.Bold,
                                                         color = MaterialTheme.colorScheme.onSurface,
@@ -579,7 +766,7 @@ fun MainScreen(
                                             }
                                         } else {
                                             Text(
-                                                text = "No profile active. Tap to select a node.",
+                                                text = stringResource(R.string.no_profile_active),
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 style = MaterialTheme.typography.bodyMedium
                                             )
@@ -605,8 +792,8 @@ fun MainScreen(
                                     val quoteBorderBrush = remember(isDark, primaryColor, tertiaryColor) {
                                         Brush.linearGradient(
                                             colors = listOf(
-                                                primaryColor.copy(alpha = if (isDark) 0.45f else 0.35f),
-                                                tertiaryColor.copy(alpha = if (isDark) 0.20f else 0.15f)
+                                                primaryColor.copy(alpha = if (isDark) 0.60f else 0.35f),
+                                                tertiaryColor.copy(alpha = if (isDark) 0.35f else 0.15f)
                                             )
                                         )
                                     }
@@ -614,6 +801,7 @@ fun MainScreen(
                                     Card(
                                         modifier = Modifier
                                             .fillMaxWidth()
+                                            .background(brush = primaryCardBrush, shape = ExpressiveCardShape)
                                             .border(
                                                 width = 1.dp,
                                                 brush = quoteBorderBrush,
@@ -626,7 +814,7 @@ fun MainScreen(
                                             .pressScaleEffect(),
                                         shape = ExpressiveCardShape,
                                         colors = CardDefaults.cardColors(
-                                            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = if (isDark) 0.25f else 0.4f)
+                                            containerColor = Color.Transparent
                                         )
                                     ) {
                                         Row(
@@ -652,13 +840,13 @@ fun MainScreen(
                                             Spacer(modifier = Modifier.width(16.dp))
                                             Column {
                                                 Text(
-                                                    text = "Love Notes ❤️",
+                                                    text = stringResource(R.string.love_notes),
                                                     fontWeight = FontWeight.Bold,
                                                     style = MaterialTheme.typography.titleMedium,
                                                     color = MaterialTheme.colorScheme.onPrimaryContainer
                                                 )
                                                 Text(
-                                                    text = "Tap to open a note from Gumball",
+                                                    text = stringResource(R.string.love_notes_desc),
                                                     style = MaterialTheme.typography.bodySmall,
                                                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
                                                 )
@@ -678,7 +866,7 @@ fun MainScreen(
                                                     tint = Color.Red
                                                 )
                                                 Spacer(modifier = Modifier.width(8.dp))
-                                                Text("Note for Sana", fontWeight = FontWeight.Bold)
+                                                Text(stringResource(R.string.note_for_sana), fontWeight = FontWeight.Bold)
                                             }
                                         },
                                         text = {
@@ -691,7 +879,7 @@ fun MainScreen(
                                         },
                                         confirmButton = {
                                             TextButton(onClick = { showLoveNoteDialog = false }) {
-                                                Text("Close")
+                                                Text(stringResource(R.string.cancel))
                                             }
                                         },
                                         shape = ExpressiveCardShape,
@@ -703,9 +891,6 @@ fun MainScreen(
                         }
                     }
                     1 -> { // Servers Tab
-                        val serverList = remember(activeSubscription) {
-                            activeSubscription?.servers?.split("\n")?.filter { it.isNotEmpty() } ?: emptyList()
-                        }
                         Column(
                             modifier = Modifier
                                 .fillMaxSize()
@@ -717,6 +902,7 @@ fun MainScreen(
                             Card(
                                 modifier = Modifier
                                     .fillMaxWidth()
+                                    .background(brush = primaryCardBrush, shape = ExpressiveCardShape)
                                     .border(
                                         width = 1.dp,
                                         brush = cardBorderBrush,
@@ -725,7 +911,7 @@ fun MainScreen(
                                     .animateContentSize(),
                                 shape = ExpressiveCardShape,
                                 colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.surface
+                                    containerColor = Color.Transparent
                                 )
                             ) {
                                 Column(modifier = Modifier.padding(20.dp)) {
@@ -736,13 +922,13 @@ fun MainScreen(
                                     ) {
                                         Column {
                                             Text(
-                                                text = "Subscription Manager",
+                                                text = stringResource(R.string.sub_manager),
                                                 fontWeight = FontWeight.Bold,
                                                 style = MaterialTheme.typography.titleMedium,
                                                 color = MaterialTheme.colorScheme.onSurface
                                             )
                                             Text(
-                                                text = "${subscriptions.size} subscription(s)",
+                                                text = stringResource(R.string.sub_count, subscriptions.size),
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
@@ -755,7 +941,7 @@ fun MainScreen(
                                         ) {
                                             Icon(
                                                 imageVector = if (isAddFormExpanded) Icons.Default.Close else Icons.Default.Add,
-                                                contentDescription = "Add subscription"
+                                                contentDescription = stringResource(R.string.add_sub)
                                             )
                                         }
                                     }
@@ -770,17 +956,17 @@ fun MainScreen(
                                             OutlinedTextField(
                                                 value = subNameInput,
                                                 onValueChange = { subNameInput = it },
-                                                label = { Text("Name (Optional)") },
+                                                label = { Text(stringResource(R.string.sub_name_label)) },
                                                 modifier = Modifier.fillMaxWidth(),
                                                 shape = ExpressiveButtonShape,
                                                 singleLine = true,
-                                                placeholder = { Text("e.g. My Premium VPN") }
+                                                placeholder = { Text(stringResource(R.string.sub_name_placeholder)) }
                                             )
                                             Spacer(modifier = Modifier.height(8.dp))
                                             OutlinedTextField(
                                                 value = subUrlInput,
                                                 onValueChange = { subUrlInput = it },
-                                                label = { Text("Subscription Link") },
+                                                label = { Text(stringResource(R.string.sub_link_label)) },
                                                 modifier = Modifier.fillMaxWidth(),
                                                 shape = ExpressiveButtonShape,
                                                 singleLine = true,
@@ -795,7 +981,7 @@ fun MainScreen(
                                                     ) {
                                                         Icon(
                                                             imageVector = Icons.Default.QrCodeScanner,
-                                                            contentDescription = "Scan QR Code"
+                                                            contentDescription = stringResource(R.string.scan_qr_code)
                                                         )
                                                     }
                                                 }
@@ -817,9 +1003,9 @@ fun MainScreen(
                                                                     val servers = fetchSubscription(subUrlInput)
                                                                     if (servers.isNotEmpty()) {
                                                                         val domain = try {
-                                                                            java.net.URI(subUrlInput).host ?: "Custom Provider"
+                                                                            java.net.URI(subUrlInput).host ?: context.getString(R.string.custom_provider)
                                                                         } catch (e: Exception) {
-                                                                            "Custom Provider"
+                                                                            context.getString(R.string.custom_provider)
                                                                         }
                                                                         val name = if (subNameInput.trim().isNotEmpty()) subNameInput.trim() else domain
                                                                         val newSub = Subscription(
@@ -841,10 +1027,10 @@ fun MainScreen(
                                                                             startVpnService(context)
                                                                         }
                                                                     } else {
-                                                                        fetchError = "No valid configurations found in subscription."
+                                                                        fetchError = context.getString(R.string.no_valid_configs)
                                                                     }
                                                                 } catch (e: Exception) {
-                                                                    fetchError = "Fetch failed: ${e.message}"
+                                                                    fetchError = context.getString(R.string.fetch_failed, e.message ?: "")
                                                                 } finally {
                                                                     isFetching = false
                                                                 }
@@ -861,7 +1047,7 @@ fun MainScreen(
                                                     } else {
                                                         Icon(imageVector = Icons.Default.CloudDownload, contentDescription = null)
                                                         Spacer(modifier = Modifier.width(6.dp))
-                                                        Text("Fetch & Add", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                                        Text(stringResource(R.string.fetch_and_add), maxLines = 1, overflow = TextOverflow.Ellipsis)
                                                     }
                                                 }
                                                 
@@ -879,7 +1065,7 @@ fun MainScreen(
                                                 ) {
                                                     Icon(imageVector = Icons.Default.Clear, contentDescription = null)
                                                     Spacer(modifier = Modifier.width(4.dp))
-                                                    Text("Clear", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                                    Text(stringResource(R.string.clear), maxLines = 1, overflow = TextOverflow.Ellipsis)
                                                 }
                                             }
                                             
@@ -901,7 +1087,7 @@ fun MainScreen(
                                             contentAlignment = Alignment.Center
                                         ) {
                                             Text(
-                                                text = "No subscriptions added. Tap '+' above to add one.",
+                                                text = stringResource(R.string.no_subs_added),
                                                 style = MaterialTheme.typography.bodyMedium,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
@@ -989,6 +1175,23 @@ fun MainScreen(
                                                         )
                                                     }
 
+                                                    val isAutoConnectEnabled = autoConnectSubs.contains(sub.id)
+                                                    IconButton(
+                                                        onClick = {
+                                                            scope.launch {
+                                                                settingsManager.toggleAutoConnectSub(sub.id)
+                                                            }
+                                                        },
+                                                        modifier = Modifier.size(36.dp)
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.Bolt,
+                                                            contentDescription = "Auto Connect Toggle",
+                                                            tint = if (isAutoConnectEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                                                            modifier = Modifier.size(20.dp)
+                                                        )
+                                                    }
+
                                                     val isLocalSub = sub.url.startsWith("local://")
                                                     if (!isLocalSub) {
                                                         val isRefreshing = refreshingSubs[sub.id] ?: false
@@ -1017,12 +1220,12 @@ fun MainScreen(
                                                                                     }
                                                                                 }
                                                                             }
-                                                                            android.widget.Toast.makeText(context, "${sub.name} updated!", android.widget.Toast.LENGTH_SHORT).show()
+                                                                            android.widget.Toast.makeText(context, context.getString(R.string.toast_updated, sub.name), android.widget.Toast.LENGTH_SHORT).show()
                                                                         } else {
-                                                                            android.widget.Toast.makeText(context, "No servers found in update", android.widget.Toast.LENGTH_SHORT).show()
+                                                                            android.widget.Toast.makeText(context, context.getString(R.string.toast_no_servers), android.widget.Toast.LENGTH_SHORT).show()
                                                                         }
                                                                     } catch(e: Exception) {
-                                                                        android.widget.Toast.makeText(context, "Update failed: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                                                        android.widget.Toast.makeText(context, context.getString(R.string.toast_update_failed, e.message ?: ""), android.widget.Toast.LENGTH_SHORT).show()
                                                                     } finally {
                                                                         refreshingSubs[sub.id] = false
                                                                     }
@@ -1039,7 +1242,7 @@ fun MainScreen(
                                                             } else {
                                                                 Icon(
                                                                     imageVector = Icons.Default.Refresh,
-                                                                    contentDescription = "Refresh",
+                                                                    contentDescription = stringResource(R.string.refresh_label),
                                                                     tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
                                                                     modifier = Modifier.size(20.dp)
                                                                 )
@@ -1095,7 +1298,7 @@ fun MainScreen(
                                         ) {
                                             Icon(imageVector = Icons.Default.AddLink, contentDescription = null)
                                             Spacer(modifier = Modifier.width(8.dp))
-                                            Text("Import")
+                                            Text(stringResource(R.string.import_str))
                                         }
                                         Button(
                                             onClick = {
@@ -1115,7 +1318,7 @@ fun MainScreen(
                                         ) {
                                             Icon(imageVector = Icons.Default.AddCircle, contentDescription = null)
                                             Spacer(modifier = Modifier.width(8.dp))
-                                            Text("Create")
+                                            Text(stringResource(R.string.create_str))
                                         }
                                     }
                                 }
@@ -1133,15 +1336,18 @@ fun MainScreen(
                                 }
                                 Card(
                                     modifier = Modifier
-                                        .fillMaxSize()
+                                        .fillMaxWidth()
+                                        .height(300.dp)
+                                        .background(brush = primaryCardBrush, shape = ExpressiveCardShape)
                                         .border(
                                             width = 1.dp,
                                             brush = cardBorderBrush,
                                             shape = ExpressiveCardShape
-                                        ),
+                                        )
+                                        .animateContentSize(),
                                     shape = ExpressiveCardShape,
                                     colors = CardDefaults.cardColors(
-                                        containerColor = MaterialTheme.colorScheme.surface
+                                        containerColor = Color.Transparent
                                     )
                                 ) {
                                     Column(modifier = Modifier.padding(20.dp)) {
@@ -1159,13 +1365,13 @@ fun MainScreen(
                                                 )
                                                 Spacer(modifier = Modifier.width(8.dp))
                                                 Text(
-                                                    text = "Available Nodes",
+                                                    text = stringResource(R.string.available_nodes),
                                                     fontWeight = FontWeight.Bold,
                                                     style = MaterialTheme.typography.titleSmall,
                                                     color = MaterialTheme.colorScheme.onSurface
                                                 )
                                             }
-
+ 
                                             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                                 IconButton(
                                                     onClick = { 
@@ -1175,20 +1381,29 @@ fun MainScreen(
                                                 ) {
                                                     Icon(
                                                         imageVector = if (isSearchVisible) Icons.Default.SearchOff else Icons.Default.Search,
-                                                        contentDescription = "Search",
+                                                        contentDescription = stringResource(R.string.search),
                                                         tint = if (isSearchVisible) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                                                     )
                                                 }
-
+ 
                                                 IconButton(
                                                     onClick = {
                                                         if (!isTestingPings) {
                                                             scope.launch {
                                                                 isTestingPings = true
-                                                                serverList.forEachIndexed { index, link ->
-                                                                    kotlinx.coroutines.delay(80L)
-                                                                    pingsMap = pingsMap + (link to (28..170).random())
+                                                                val jobs = serverList.map { link ->
+                                                                    scope.async(kotlinx.coroutines.Dispatchers.IO) {
+                                                                        val hostPort = getHostAndPortFromLink(link)
+                                                                        val ping = if (hostPort != null) {
+                                                                            measurePingDelay(hostPort.first, hostPort.second)
+                                                                        } else {
+                                                                            -1
+                                                                        }
+                                                                        link to ping
+                                                                    }
                                                                 }
+                                                                val results = jobs.awaitAll()
+                                                                pingsMap = pingsMap + results.toMap()
                                                                 isTestingPings = false
                                                             }
                                                         }
@@ -1203,14 +1418,25 @@ fun MainScreen(
                                                     } else {
                                                         Icon(
                                                             imageVector = Icons.Default.Speed,
-                                                            contentDescription = "Test Pings",
+                                                            contentDescription = stringResource(R.string.test_pings),
                                                             tint = MaterialTheme.colorScheme.primary
                                                         )
                                                     }
                                                 }
+
+                                                IconButton(
+                                                    onClick = { isNodesExpanded = true },
+                                                    modifier = Modifier.pressScaleEffect()
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Fullscreen,
+                                                        contentDescription = "Expand Card",
+                                                        tint = MaterialTheme.colorScheme.primary
+                                                    )
+                                                }
                                             }
                                         }
-
+ 
                                         AnimatedVisibility(
                                             visible = isSearchVisible,
                                             enter = expandVertically() + fadeIn(),
@@ -1221,7 +1447,7 @@ fun MainScreen(
                                                 OutlinedTextField(
                                                     value = searchQuery,
                                                     onValueChange = { searchQuery = it },
-                                                    placeholder = { Text("Filter by location or name...") },
+                                                    placeholder = { Text(stringResource(R.string.search_placeholder)) },
                                                     modifier = Modifier.fillMaxWidth(),
                                                     shape = ExpressiveButtonShape,
                                                     singleLine = true,
@@ -1229,16 +1455,16 @@ fun MainScreen(
                                                     trailingIcon = {
                                                         if (searchQuery.isNotEmpty()) {
                                                             IconButton(onClick = { searchQuery = "" }) {
-                                                                Icon(Icons.Default.Clear, contentDescription = "Clear", modifier = Modifier.size(18.dp))
+                                                                Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.clear), modifier = Modifier.size(18.dp))
                                                             }
                                                         }
                                                     }
                                                 )
                                             }
                                         }
-
+ 
                                         Spacer(modifier = Modifier.height(10.dp))
-
+ 
                                         ScrollableTabRow(
                                             selectedTabIndex = selectedTab,
                                             edgePadding = 0.dp,
@@ -1254,7 +1480,7 @@ fun MainScreen(
                                             },
                                             divider = {}
                                         ) {
-                                            listOf("All", "VLESS", "Trojan", "Shadowsocks").forEachIndexed { index, title ->
+                                            listOf(stringResource(R.string.tab_all), "VLESS", "Trojan", "Shadowsocks").forEachIndexed { index, title ->
                                                 Tab(
                                                     selected = selectedTab == index,
                                                     onClick = { selectedTab = index },
@@ -1268,28 +1494,8 @@ fun MainScreen(
                                                 )
                                             }
                                         }
-
                                         Spacer(modifier = Modifier.height(12.dp))
-
-                                        val filteredServerList = remember(serverList, searchQuery, selectedTab) {
-                                            serverList.mapNotNull { serverLink ->
-                                                val type = serverLink.substringBefore("://").uppercase()
-                                                val matchesTab = when (selectedTab) {
-                                                    0 -> true
-                                                    1 -> type == "VLESS"
-                                                    2 -> type == "TROJAN"
-                                                    3 -> type == "SS" || type == "SHADOWSOCKS"
-                                                    else -> true
-                                                }
-                                                if (matchesTab) {
-                                                    val name = getProxyName(serverLink)
-                                                    if (name.contains(searchQuery, ignoreCase = true)) {
-                                                        ServerItem(link = serverLink, name = name, type = type)
-                                                    } else null
-                                                } else null
-                                            }
-                                        }
-
+ 
                                         if (filteredServerList.isEmpty()) {
                                             Box(
                                                 modifier = Modifier
@@ -1298,7 +1504,7 @@ fun MainScreen(
                                                 contentAlignment = Alignment.Center
                                             ) {
                                                 Text(
-                                                    text = "No matching nodes found",
+                                                    text = stringResource(R.string.no_matching_nodes),
                                                     style = MaterialTheme.typography.bodyMedium,
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                                 )
@@ -1329,6 +1535,7 @@ fun MainScreen(
                                                     
                                                     Row(
                                                         modifier = Modifier
+                                                            .animateItem()
                                                             .fillMaxWidth()
                                                             .clip(ExpressiveButtonShape)
                                                             .background(
@@ -1397,10 +1604,12 @@ fun MainScreen(
                                                                 }
                                                                 
                                                                 Spacer(modifier = Modifier.width(8.dp))
-
+ 
                                                                 val ping = pingsMap[serverLink]
                                                                 if (ping != null) {
+                                                                    val isTimeout = ping < 0
                                                                     val pingColor = when {
+                                                                        isTimeout -> Color(0xFFF44336)
                                                                         ping < 60 -> Color(0xFF4CAF50)
                                                                         ping < 120 -> Color(0xFFFFB300)
                                                                         else -> Color(0xFFF44336)
@@ -1413,7 +1622,7 @@ fun MainScreen(
                                                                     )
                                                                     Spacer(modifier = Modifier.width(4.dp))
                                                                     Text(
-                                                                        text = "${ping} ms",
+                                                                        text = if (isTimeout) "Timeout" else "${ping} ms",
                                                                         style = MaterialTheme.typography.labelSmall,
                                                                         color = pingColor,
                                                                         fontWeight = FontWeight.Bold,
@@ -1429,7 +1638,7 @@ fun MainScreen(
                                                                     )
                                                                     Spacer(modifier = Modifier.width(4.dp))
                                                                     Text(
-                                                                        text = "Untested",
+                                                                        text = stringResource(R.string.untested),
                                                                         style = MaterialTheme.typography.labelSmall,
                                                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                                         maxLines = 1,
@@ -1449,19 +1658,19 @@ fun MainScreen(
                                                                         putExtra(Intent.EXTRA_TEXT, serverLink)
                                                                         this.type = "text/plain"
                                                                     }
-                                                                    val shareIntent = Intent.createChooser(sendIntent, "Share Node Config")
+                                                                    val shareIntent = Intent.createChooser(sendIntent, context.getString(R.string.share_config))
                                                                     context.startActivity(shareIntent)
                                                                 },
                                                                 modifier = Modifier.size(36.dp)
                                                             ) {
                                                                 Icon(
                                                                     imageVector = Icons.Default.Share,
-                                                                    contentDescription = "Share Node Config",
+                                                                    contentDescription = stringResource(R.string.share_config),
                                                                     tint = MaterialTheme.colorScheme.primary,
                                                                     modifier = Modifier.size(18.dp)
                                                                 )
                                                             }
-
+ 
                                                             if (activeSubId == "manual") {
                                                                 IconButton(
                                                                     onClick = {
@@ -1472,12 +1681,12 @@ fun MainScreen(
                                                                 ) {
                                                                     Icon(
                                                                         imageVector = Icons.Default.Edit,
-                                                                        contentDescription = "Edit Node Config",
+                                                                        contentDescription = stringResource(R.string.edit_config),
                                                                         tint = MaterialTheme.colorScheme.primary,
                                                                         modifier = Modifier.size(18.dp)
                                                                     )
                                                                 }
-
+ 
                                                                 IconButton(
                                                                     onClick = {
                                                                         scope.launch {
@@ -1497,7 +1706,7 @@ fun MainScreen(
                                                                 ) {
                                                                     Icon(
                                                                         imageVector = Icons.Default.Delete,
-                                                                        contentDescription = "Delete Manual Node",
+                                                                        contentDescription = stringResource(R.string.delete_config),
                                                                         tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
                                                                         modifier = Modifier.size(18.dp)
                                                                     )
@@ -1524,6 +1733,8 @@ fun MainScreen(
                             Spacer(modifier = Modifier.height(16.dp))
                             LogsConsole(
                                 context = context,
+                                cardStyle = cardStyle,
+                                isDark = isDark,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .weight(1f)
@@ -1544,13 +1755,14 @@ fun MainScreen(
                             Card(
                                 modifier = Modifier
                                     .fillMaxWidth()
+                                    .background(brush = primaryCardBrush, shape = ExpressiveCardShape)
                                     .border(width = 1.dp, brush = cardBorderBrush, shape = ExpressiveCardShape),
                                 shape = ExpressiveCardShape,
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                                colors = CardDefaults.cardColors(containerColor = Color.Transparent)
                             ) {
                                 Column(modifier = Modifier.padding(16.dp)) {
                                     Text(
-                                        text = "Connection Settings",
+                                        text = stringResource(R.string.conn_settings),
                                         fontWeight = FontWeight.Bold,
                                         style = MaterialTheme.typography.titleMedium,
                                         color = MaterialTheme.colorScheme.onSurface
@@ -1566,8 +1778,8 @@ fun MainScreen(
                                             Icon(Icons.Default.Language, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                                             Spacer(modifier = Modifier.width(12.dp))
                                             Column {
-                                                Text("Bypass Iran Traffic", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
-                                                Text("Route .ir sites directly", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                Text(stringResource(R.string.bypass_iran), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                                                Text(stringResource(R.string.bypass_iran_desc), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                             }
                                         }
                                         Switch(checked = bypassIran, onCheckedChange = { scope.launch { settingsManager.setBypassIran(it); if (vpnState == "CONNECTED") startVpnService(context) } })
@@ -1586,8 +1798,8 @@ fun MainScreen(
                                             Icon(Icons.Default.Router, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                                             Spacer(modifier = Modifier.width(12.dp))
                                             Column {
-                                                Text("Bypass LAN", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
-                                                Text("Exclude local network traffic", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                Text(stringResource(R.string.bypass_lan), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                                                Text(stringResource(R.string.bypass_lan_desc), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                             }
                                         }
                                         Switch(checked = bypassLan, onCheckedChange = { scope.launch { settingsManager.setBypassLan(it); if (vpnState == "CONNECTED") startVpnService(context) } })
@@ -1606,8 +1818,8 @@ fun MainScreen(
                                             Icon(Icons.Default.NotificationsActive, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                                             Spacer(modifier = Modifier.width(12.dp))
                                             Column {
-                                                Text("Live Status Notification", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
-                                                Text("Show status bar chip & switches", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                Text(stringResource(R.string.live_stats), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                                                Text(stringResource(R.string.live_stats_desc), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                             }
                                         }
                                         Switch(checked = showLiveNotification, onCheckedChange = { scope.launch { settingsManager.setShowLiveNotification(it); if (vpnState == "CONNECTED") startVpnService(context) } })
@@ -1615,7 +1827,7 @@ fun MainScreen(
                                     if (showLiveNotification) {
                                         Spacer(modifier = Modifier.height(8.dp))
                                         Text(
-                                            text = "Not showing up? Tap here to view the guide.",
+                                            text = stringResource(R.string.guide_tap_here),
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.primary,
                                             fontWeight = FontWeight.SemiBold,
@@ -1632,11 +1844,12 @@ fun MainScreen(
                             Card(
                                 modifier = Modifier
                                     .fillMaxWidth()
+                                    .background(brush = secondaryCardBrush, shape = ExpressiveCardShape)
                                     .border(width = 1.dp, brush = cardBorderBrush, shape = ExpressiveCardShape)
                                     .clickable { onItemClick(SplitTunneling) }
                                     .pressScaleEffect(),
                                 shape = ExpressiveCardShape,
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                                colors = CardDefaults.cardColors(containerColor = Color.Transparent)
                             ) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth().padding(16.dp),
@@ -1647,12 +1860,12 @@ fun MainScreen(
                                         Icon(Icons.Default.FilterAlt, contentDescription = null, tint = MaterialTheme.colorScheme.tertiary)
                                         Spacer(modifier = Modifier.width(12.dp))
                                         Column {
-                                            Text("Split Tunneling", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                                            Text(stringResource(R.string.split_tunneling), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
                                             Text(
                                                 text = if (splitTunnelingEnabled) {
-                                                    val modeText = if (splitTunnelingMode == "bypass") "Bypassing" else "Routing"
-                                                    "$modeText ${splitTunnelingApps.size} apps"
-                                                } else "Exclude/include apps from VPN",
+                                                    val modeText = if (splitTunnelingMode == "bypass") stringResource(R.string.bypass_apps) else stringResource(R.string.route_apps)
+                                                    "$modeText: ${splitTunnelingApps.size}"
+                                                } else stringResource(R.string.split_tunneling_desc),
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
@@ -1666,7 +1879,7 @@ fun MainScreen(
                                                 .padding(horizontal = 8.dp, vertical = 4.dp)
                                         ) {
                                             Text(
-                                                text = if (splitTunnelingEnabled) "ON" else "OFF",
+                                                text = if (splitTunnelingEnabled) stringResource(R.string.state_on) else stringResource(R.string.state_off),
                                                 style = MaterialTheme.typography.labelSmall,
                                                 fontWeight = FontWeight.Bold,
                                                 color = if (splitTunnelingEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
@@ -1682,9 +1895,10 @@ fun MainScreen(
                             Card(
                                 modifier = Modifier
                                     .fillMaxWidth()
+                                    .background(brush = tertiaryCardBrush, shape = ExpressiveCardShape)
                                     .border(width = 1.dp, brush = cardBorderBrush, shape = ExpressiveCardShape),
                                 shape = ExpressiveCardShape,
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                                colors = CardDefaults.cardColors(containerColor = Color.Transparent)
                             ) {
                                 Column(modifier = Modifier.padding(16.dp)) {
                                     Row(
@@ -1696,32 +1910,38 @@ fun MainScreen(
                                             Icon(Icons.Default.Sync, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                                             Spacer(modifier = Modifier.width(12.dp))
                                             Column {
-                                                Text("Auto-update Subscriptions", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
-                                                Text("Fetch fresh links automatically", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                Text(stringResource(R.string.auto_update), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                                                Text(stringResource(R.string.auto_update_desc), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                             }
                                         }
                                         Switch(checked = autoUpdateSubs, onCheckedChange = { scope.launch { settingsManager.setAutoUpdateSubs(it) } })
                                     }
-                                    if (autoUpdateSubs) {
-                                        Spacer(modifier = Modifier.height(12.dp))
-                                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                        Text("Update Interval", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                                        Spacer(modifier = Modifier.height(6.dp))
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                        ) {
-                                            listOf("startup" to "Startup", "daily" to "Daily", "weekly" to "Weekly").forEach { (intervalKey, label) ->
-                                                FilterChip(
-                                                    selected = autoUpdateInterval == intervalKey,
-                                                    onClick = { scope.launch { settingsManager.setAutoUpdateInterval(intervalKey) } },
-                                                    label = { Text(label) },
-                                                    shape = ExpressiveChipShape
-                                                )
-                                            }
-                                        }
-                                    }
+                                    AnimatedVisibility(
+                                         visible = autoUpdateSubs,
+                                         enter = expandVertically() + fadeIn(),
+                                         exit = shrinkVertically() + fadeOut()
+                                     ) {
+                                         Column {
+                                             Spacer(modifier = Modifier.height(12.dp))
+                                             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                             Spacer(modifier = Modifier.height(8.dp))
+                                             Text(stringResource(R.string.interval), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                             Spacer(modifier = Modifier.height(6.dp))
+                                             Row(
+                                                 modifier = Modifier.fillMaxWidth(),
+                                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                             ) {
+                                                 listOf("startup" to stringResource(R.string.startup), "daily" to stringResource(R.string.daily), "weekly" to stringResource(R.string.weekly)).forEach { (intervalKey, label) ->
+                                                     FilterChip(
+                                                         selected = autoUpdateInterval == intervalKey,
+                                                         onClick = { scope.launch { settingsManager.setAutoUpdateInterval(intervalKey) } },
+                                                         label = { Text(label) },
+                                                         shape = ExpressiveChipShape
+                                                     )
+                                                 }
+                                             }
+                                         }
+                                     }
                                 }
                             }
                             
@@ -1730,9 +1950,10 @@ fun MainScreen(
                             Card(
                                 modifier = Modifier
                                     .fillMaxWidth()
+                                    .background(brush = primaryCardBrush, shape = ExpressiveCardShape)
                                     .border(width = 1.dp, brush = cardBorderBrush, shape = ExpressiveCardShape),
                                 shape = ExpressiveCardShape,
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                                colors = CardDefaults.cardColors(containerColor = Color.Transparent)
                             ) {
                                 Column(modifier = Modifier.animateContentSize()) {
                                     Row(
@@ -1744,125 +1965,234 @@ fun MainScreen(
                                             Icon(Icons.Default.Tune, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                                             Spacer(modifier = Modifier.width(12.dp))
                                             Column {
-                                                Text("Advanced Mode", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
-                                                Text("Unlock protocol parameters", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                Text(stringResource(R.string.adv_mode), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                                                Text(stringResource(R.string.adv_mode_desc), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                             }
                                         }
                                         Switch(checked = isAdvancedMode, onCheckedChange = { scope.launch { settingsManager.setAdvancedMode(it) } })
                                     }
-                                    if (isAdvancedMode) {
-                                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
-                                        Column(modifier = Modifier.padding(16.dp)) {
-                                            OutlinedTextField(
-                                                value = secureDns,
-                                                onValueChange = { scope.launch { settingsManager.setSecureDns(it) } },
-                                                label = { Text("Secure DNS (DoH)") },
-                                                modifier = Modifier.fillMaxWidth(),
-                                                shape = ExpressiveButtonShape
-                                            )
-                                            
-                                            Spacer(modifier = Modifier.height(12.dp))
-                                            
-                                            Text("TUN Network Stack", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
-                                            Spacer(modifier = Modifier.height(4.dp))
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                            ) {
-                                                listOf("mixed", "gvisor", "system").forEach { stackOption ->
-                                                    FilterChip(
-                                                        selected = tunStack == stackOption,
-                                                        onClick = { scope.launch { settingsManager.setTunStack(stackOption); if (vpnState == "CONNECTED") startVpnService(context) } },
-                                                        label = { Text(stackOption) },
-                                                        shape = ExpressiveButtonShape
-                                                    )
-                                                }
-                                            }
-                                            
-                                            Spacer(modifier = Modifier.height(12.dp))
-                                            
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Column(modifier = Modifier.weight(1f)) {
-                                                    Text("TLS Fragmentation", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
-                                                    Text("Split TLS packets for DPI bypass", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                                }
-                                                Switch(checked = enableFragment, onCheckedChange = { scope.launch { settingsManager.setEnableFragment(it); if (vpnState == "CONNECTED") startVpnService(context) } })
-                                            }
-                                            if (enableFragment) {
-                                                Spacer(modifier = Modifier.height(8.dp))
-                                                Row(
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                                ) {
-                                                    OutlinedTextField(
-                                                        value = fragmentLength,
-                                                        onValueChange = { scope.launch { settingsManager.setFragmentLength(it) } },
-                                                        label = { Text("Length") },
-                                                        modifier = Modifier.weight(1f),
-                                                        shape = ExpressiveButtonShape
-                                                    )
-                                                    OutlinedTextField(
-                                                        value = fragmentInterval,
-                                                        onValueChange = { scope.launch { settingsManager.setFragmentInterval(it) } },
-                                                        label = { Text("Interval") },
-                                                        modifier = Modifier.weight(1f),
-                                                        shape = ExpressiveButtonShape
-                                                    )
-                                                }
-                                            }
-                                            
-                                            Spacer(modifier = Modifier.height(12.dp))
-                                            
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Column(modifier = Modifier.weight(1f)) {
-                                                    Text("TCP Multiplexing", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
-                                                    Text("Aggregate TCP streams", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                                }
-                                                Switch(checked = enableMux, onCheckedChange = { scope.launch { settingsManager.setEnableMux(it); if (vpnState == "CONNECTED") startVpnService(context) } })
-                                            }
-                                        }
-                                    }
+                                    AnimatedVisibility(
+                                         visible = isAdvancedMode,
+                                         enter = expandVertically() + fadeIn(),
+                                         exit = shrinkVertically() + fadeOut()
+                                     ) {
+                                         Column {
+                                             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
+                                             Column(modifier = Modifier.padding(16.dp)) {
+                                                 OutlinedTextField(
+                                                     value = secureDns,
+                                                     onValueChange = { scope.launch { settingsManager.setSecureDns(it) } },
+                                                     label = { Text(stringResource(R.string.secure_dns_doh)) },
+                                                     modifier = Modifier.fillMaxWidth(),
+                                                     shape = ExpressiveButtonShape
+                                                 )
+                                                 
+                                                 Spacer(modifier = Modifier.height(12.dp))
+                                                 
+                                                 Text(stringResource(R.string.tun_network_stack), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                                                 Spacer(modifier = Modifier.height(4.dp))
+                                                 Row(
+                                                     modifier = Modifier.fillMaxWidth(),
+                                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                                 ) {
+                                                     listOf("mixed", "gvisor", "system").forEach { stackOption ->
+                                                         FilterChip(
+                                                             selected = tunStack == stackOption,
+                                                             onClick = { scope.launch { settingsManager.setTunStack(stackOption); if (vpnState == "CONNECTED") startVpnService(context) } },
+                                                             label = { Text(stackOption) },
+                                                             shape = ExpressiveButtonShape
+                                                         )
+                                                     }
+                                                 }
+                                                 
+                                                 Spacer(modifier = Modifier.height(12.dp))
+                                                 
+                                                 Row(
+                                                     modifier = Modifier.fillMaxWidth(),
+                                                     horizontalArrangement = Arrangement.SpaceBetween,
+                                                     verticalAlignment = Alignment.CenterVertically
+                                                 ) {
+                                                     Column(modifier = Modifier.weight(1f)) {
+                                                         Text(stringResource(R.string.tls_fragmentation), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                                                         Text(stringResource(R.string.tls_fragmentation_desc), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                     }
+                                                     Switch(checked = enableFragment, onCheckedChange = { scope.launch { settingsManager.setEnableFragment(it); if (vpnState == "CONNECTED") startVpnService(context) } })
+                                                 }
+                                                 
+                                                 AnimatedVisibility(
+                                                     visible = enableFragment,
+                                                     enter = expandVertically() + fadeIn(),
+                                                     exit = shrinkVertically() + fadeOut()
+                                                 ) {
+                                                     Column {
+                                                         Spacer(modifier = Modifier.height(8.dp))
+                                                         Row(
+                                                             modifier = Modifier.fillMaxWidth(),
+                                                             horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                                         ) {
+                                                             OutlinedTextField(
+                                                                 value = fragmentLength,
+                                                                 onValueChange = { scope.launch { settingsManager.setFragmentLength(it) } },
+                                                                 label = { Text(stringResource(R.string.length)) },
+                                                                 modifier = Modifier.weight(1f),
+                                                                 shape = ExpressiveButtonShape
+                                                             )
+                                                             OutlinedTextField(
+                                                                 value = fragmentInterval,
+                                                                 onValueChange = { scope.launch { settingsManager.setFragmentInterval(it) } },
+                                                                 label = { Text(stringResource(R.string.interval)) },
+                                                                 modifier = Modifier.weight(1f),
+                                                                 shape = ExpressiveButtonShape
+                                                             )
+                                                         }
+                                                     }
+                                                 }
+                                                 
+                                                 Spacer(modifier = Modifier.height(12.dp))
+                                                 
+                                                 Row(
+                                                     modifier = Modifier.fillMaxWidth(),
+                                                     horizontalArrangement = Arrangement.SpaceBetween,
+                                                     verticalAlignment = Alignment.CenterVertically
+                                                 ) {
+                                                     Column(modifier = Modifier.weight(1f)) {
+                                                         Text(stringResource(R.string.tcp_multiplexing), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                                                         Text(stringResource(R.string.tcp_multiplexing_desc), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                     }
+                                                     Switch(checked = enableMux, onCheckedChange = { scope.launch { settingsManager.setEnableMux(it); if (vpnState == "CONNECTED") startVpnService(context) } })
+                                                 }
+                                             }
+                                         }
+                                     }
                                 }
                             }
                             
                             Spacer(modifier = Modifier.height(16.dp))
                             
-                            if (Config.IS_SPECIAL) {
-                                val currentTheme by settingsManager.specialTheme.collectAsStateWithLifecycle(initialValue = "cherry_blossom")
+                            if (true) {
+                                val defaultThemeKey = if (Config.IS_SPECIAL) "cherry_blossom" else "dynamic"
+                                val currentTheme by settingsManager.specialTheme.collectAsStateWithLifecycle(initialValue = defaultThemeKey)
+                                val themeMode by settingsManager.themeMode.collectAsStateWithLifecycle(initialValue = "system")
                                 Card(
                                     modifier = Modifier
                                         .fillMaxWidth()
+                                        .background(brush = primaryCardBrush, shape = ExpressiveCardShape)
                                         .border(width = 1.dp, brush = cardBorderBrush, shape = ExpressiveCardShape),
                                     shape = ExpressiveCardShape,
-                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                                    colors = CardDefaults.cardColors(containerColor = Color.Transparent)
                                 ) {
                                     Column(modifier = Modifier.padding(16.dp)) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(Icons.Default.Palette, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                                            Spacer(modifier = Modifier.width(12.dp))
-                                            Column {
-                                                Text("App Theme", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
-                                                Text("Select your favorite style", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        // Row 1: Dark Mode Toggle
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                                Icon(
+                                                    imageVector = when (themeMode) {
+                                                        "light" -> Icons.Default.LightMode
+                                                        "dark" -> Icons.Default.DarkMode
+                                                        else -> Icons.Default.SettingsSuggest
+                                                    },
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.primary
+                                                )
+                                                Spacer(modifier = Modifier.width(12.dp))
+                                                Column {
+                                                    Text(stringResource(R.string.dark_mode_title), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                                                    Text(stringResource(R.string.dark_mode_desc), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                }
                                             }
                                         }
-                                        Spacer(modifier = Modifier.height(12.dp))
+                                        Spacer(modifier = Modifier.height(8.dp))
                                         Row(
                                             modifier = Modifier.fillMaxWidth(),
                                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                                         ) {
-                                            listOf("cherry_blossom" to "Cherry", "lavender_dreams" to "Lavender", "rose_gold" to "Rose Gold").forEach { (themeKey, label) ->
+                                            listOf(
+                                                "system" to R.string.theme_mode_system,
+                                                "light" to R.string.theme_mode_light,
+                                                "dark" to R.string.theme_mode_dark
+                                            ).forEach { (modeKey, stringId) ->
+                                                FilterChip(
+                                                    selected = themeMode == modeKey,
+                                                    onClick = { scope.launch { settingsManager.setThemeMode(modeKey) } },
+                                                    label = { Text(stringResource(stringId)) },
+                                                    shape = ExpressiveButtonShape
+                                                )
+                                            }
+                                        }
+                                        
+                                        Spacer(modifier = Modifier.height(12.dp))
+                                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                        Spacer(modifier = Modifier.height(12.dp))
+
+                                        // Row 2: Theme Palette Selector
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.Palette, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                            Spacer(modifier = Modifier.width(12.dp))
+                                            Column {
+                                                Text(stringResource(R.string.app_theme), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                                                Text(stringResource(R.string.select_style), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            }
+                                        }
+                                        Spacer(modifier = Modifier.height(12.dp))
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .horizontalScroll(rememberScrollState()),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            listOf(
+                                                "dynamic" to R.string.theme_dynamic,
+                                                "cherry_blossom" to R.string.theme_cherry,
+                                                "lavender_dreams" to R.string.theme_lavender,
+                                                "rose_gold" to R.string.theme_rosegold,
+                                                "midnight_blue" to R.string.theme_midnight,
+                                                "forest_green" to R.string.theme_forest,
+                                                "sunset_orange" to R.string.theme_sunset,
+                                                "ocean_teal" to R.string.theme_teal,
+                                                "royal_amethyst" to R.string.theme_amethyst,
+                                                "nordic_slate" to R.string.theme_slate
+                                            ).filter { (themeKey, _) ->
+                                                Config.IS_SPECIAL || (themeKey != "cherry_blossom" && themeKey != "lavender_dreams" && themeKey != "rose_gold")
+                                            }.forEach { (themeKey, stringId) ->
                                                 FilterChip(
                                                     selected = currentTheme == themeKey,
                                                     onClick = { scope.launch { settingsManager.setSpecialTheme(themeKey) } },
-                                                    label = { Text(label) },
+                                                    label = { Text(stringResource(stringId)) },
+                                                    shape = ExpressiveButtonShape
+                                                )
+                                            }
+                                        }
+
+                                        Spacer(modifier = Modifier.height(12.dp))
+                                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                        Spacer(modifier = Modifier.height(12.dp))
+
+                                        // Row 3: Card Style Selector
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.Layers, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                            Spacer(modifier = Modifier.width(12.dp))
+                                            Column {
+                                                Text(stringResource(R.string.style_title), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                                                Text(stringResource(R.string.style_desc), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            }
+                                        }
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            listOf(
+                                                "glass" to R.string.style_glass,
+                                                "solid" to R.string.style_solid
+                                            ).forEach { (styleKey, stringId) ->
+                                                FilterChip(
+                                                    selected = cardStyle == styleKey,
+                                                    onClick = { scope.launch { settingsManager.setCardStyle(styleKey) } },
+                                                    label = { Text(stringResource(stringId)) },
                                                     shape = ExpressiveButtonShape
                                                 )
                                             }
@@ -1875,9 +2205,10 @@ fun MainScreen(
                             Card(
                                 modifier = Modifier
                                     .fillMaxWidth()
+                                    .background(brush = secondaryCardBrush, shape = ExpressiveCardShape)
                                     .border(width = 1.dp, brush = cardBorderBrush, shape = ExpressiveCardShape),
                                 shape = ExpressiveCardShape,
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.5f))
+                                colors = CardDefaults.cardColors(containerColor = Color.Transparent)
                             ) {
                                 Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                                     Text(
@@ -1887,7 +2218,7 @@ fun MainScreen(
                                     )
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(
-                                        text = if (Config.IS_SPECIAL) "Made with ❤️ for Sana" else "High-Performance Secure Network Client",
+                                        text = if (Config.IS_SPECIAL) "Made with ❤️ for Sana" else stringResource(R.string.app_short_desc),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -1897,17 +2228,31 @@ fun MainScreen(
                         }
                     }
                 }
+                }
+                }
             }
         }
     }
 
+    var isImportFetching by remember { mutableStateOf(false) }
+
     // Import Profile Dialog
     if (showImportDialog) {
+        val isImportingSubscription = remember(importText) {
+            val trimmed = importText.trim()
+            (trimmed.startsWith("http://") || trimmed.startsWith("https://")) &&
+            !trimmed.startsWith("vless://") &&
+            !trimmed.startsWith("trojan://") &&
+            !trimmed.startsWith("ss://") &&
+            !trimmed.startsWith("socks5://") &&
+            !trimmed.startsWith("socks://")
+        }
+
         AlertDialog(
-            onDismissRequest = { showImportDialog = false },
+            onDismissRequest = { if (!isImportFetching) showImportDialog = false },
             title = {
                 Text(
-                    text = "Import Config Link",
+                    text = stringResource(R.string.import_config_link),
                     fontWeight = FontWeight.Bold
                 )
             },
@@ -1919,7 +2264,7 @@ fun MainScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Paste config link or scan QR code:",
+                            text = stringResource(R.string.paste_config_link),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.weight(1f)
@@ -1929,11 +2274,12 @@ fun MainScreen(
                                 scanResultCallback = { result ->
                                     importText = result
                                 }
-                            }
+                            },
+                            enabled = !isImportFetching
                         ) {
                             Icon(
                                 imageVector = Icons.Default.QrCodeScanner,
-                                contentDescription = "Scan QR Code",
+                                contentDescription = stringResource(R.string.scan_qr_code),
                                 tint = MaterialTheme.colorScheme.primary
                             )
                         }
@@ -1945,41 +2291,98 @@ fun MainScreen(
                             .fillMaxWidth()
                             .height(160.dp),
                         shape = ExpressiveButtonShape,
-                        placeholder = { Text("vless://... or trojan://... or { ... }") }
+                        placeholder = { Text("vless://... or trojan://... or { ... }") },
+                        enabled = !isImportFetching
                     )
+                    if (isImportingSubscription) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        val isRtl = androidx.compose.ui.platform.LocalLayoutDirection.current == androidx.compose.ui.unit.LayoutDirection.Rtl
+                        val detectionText = if (isRtl) {
+                            "لینک اشتراک شناسایی شد! با زدن درون‌ریزی، کانفیگ‌های آن دریافت و به مدیریت اشتراک‌ها اضافه می‌شوند."
+                        } else {
+                            "Subscription link detected! Clicking import will fetch its configs and add it to your Subscription Manager."
+                        }
+                        Text(
+                            text = detectionText,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 }
             },
             confirmButton = {
                 Button(
                     onClick = {
                         scope.launch {
-                            val currentManual = manualServersStr
                             val trimmedImport = importText.trim()
                             if (trimmedImport.isNotEmpty()) {
-                                val updatedManual = if (currentManual.isEmpty()) trimmedImport else "$currentManual\n$trimmedImport"
-                                settingsManager.setManualServers(updatedManual)
-                                settingsManager.setActiveSubId("manual")
-                                settingsManager.setActiveProfile(trimmedImport)
+                                if (isImportingSubscription) {
+                                    isImportFetching = true
+                                    try {
+                                        val servers = fetchSubscription(trimmedImport)
+                                        if (servers.isNotEmpty()) {
+                                            val domain = try {
+                                                java.net.URI(trimmedImport).host ?: context.getString(R.string.custom_provider)
+                                            } catch (e: Exception) {
+                                                context.getString(R.string.custom_provider)
+                                            }
+                                            val newSub = Subscription(
+                                                id = java.util.UUID.randomUUID().toString(),
+                                                name = domain,
+                                                url = trimmedImport,
+                                                servers = servers.joinToString("\n")
+                                            )
+                                            val updatedList = subscriptions + newSub
+                                            settingsManager.setSubscriptionList(serializeSubscriptions(updatedList))
+                                            settingsManager.setActiveSubId(newSub.id)
+                                            settingsManager.setActiveProfile(servers[0])
+                                            
+                                            if (vpnState == "CONNECTED") {
+                                                startVpnService(context)
+                                            }
+                                        }
+                                    } catch (e: Exception) {
+                                        android.util.Log.e("ExpressiveBox", "Failed to fetch subscription on import: ${e.message}")
+                                    } finally {
+                                        isImportFetching = false
+                                    }
+                                } else {
+                                    val currentManual = manualServersStr
+                                    val updatedManual = if (currentManual.isEmpty()) trimmedImport else "$currentManual\n$trimmedImport"
+                                    settingsManager.setManualServers(updatedManual)
+                                    settingsManager.setActiveSubId("manual")
+                                    settingsManager.setActiveProfile(trimmedImport)
+                                    if (vpnState == "CONNECTED") {
+                                        startVpnService(context)
+                                    }
+                                }
                             }
                             showImportDialog = false
                             importText = ""
-                            if (vpnState == "CONNECTED") {
-                                startVpnService(context)
-                            }
                         }
                     },
                     modifier = Modifier.pressScaleEffect(),
-                    shape = ExpressiveButtonShape
+                    shape = ExpressiveButtonShape,
+                    enabled = !isImportFetching && importText.trim().isNotEmpty()
                 ) {
-                    Text("Import")
+                    if (isImportFetching) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Text(stringResource(R.string.import_str))
+                    }
                 }
             },
             dismissButton = {
                 TextButton(
                     onClick = { showImportDialog = false },
-                    modifier = Modifier.pressScaleEffect()
+                    modifier = Modifier.pressScaleEffect(),
+                    enabled = !isImportFetching
                 ) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.cancel))
                 }
             },
             shape = ExpressiveCardShape
@@ -2000,6 +2403,13 @@ fun MainScreen(
                 editSni = ""
                 editLinkInput = ""
                 editorMode = "form"
+                editShowAdvanced = false
+                editTransportType = "tcp"
+                editTransportPath = ""
+                editTransportHost = ""
+                editTransportServiceName = ""
+                editTransportSeed = ""
+                editTransportHeaderType = "none"
             } else if (link.startsWith("{")) {
                 editorMode = "link"
                 editLinkInput = link
@@ -2045,6 +2455,15 @@ fun MainScreen(
                     editTls = security == "tls" || security == "reality" || queryParams["tls"] == "true" || queryParams["tls"] == "1" || scheme == "https"
                     editSni = queryParams["sni"] ?: ""
                     
+                    val type = queryParams["type"] ?: "tcp"
+                    editTransportType = type
+                    editTransportPath = queryParams["path"] ?: ""
+                    editTransportHost = queryParams["host"] ?: ""
+                    editTransportServiceName = queryParams["serviceName"] ?: queryParams["service_name"] ?: ""
+                    editTransportSeed = queryParams["seed"] ?: ""
+                    editTransportHeaderType = queryParams["headerType"] ?: queryParams["header_type"] ?: queryParams["header"] ?: "none"
+                    editShowAdvanced = type != "tcp" && type.isNotEmpty()
+                    
                     editLinkInput = link
                     editorMode = "form"
                 } catch(e: Exception) {
@@ -2062,7 +2481,7 @@ fun MainScreen(
             onDismissRequest = { editingNodeLink = null },
             title = {
                 Text(
-                    text = if (isNewNode) "Create Custom Node" else "Edit Node Configuration",
+                    text = if (isNewNode) stringResource(R.string.create_custom_node) else stringResource(R.string.edit_node_config),
                     fontWeight = FontWeight.Bold
                 )
             },
@@ -2080,19 +2499,19 @@ fun MainScreen(
                         Tab(
                             selected = editorMode == "form",
                             onClick = { editorMode = "form" },
-                            text = { Text("Form Editor") }
+                            text = { Text(stringResource(R.string.form_editor)) }
                         )
                         Tab(
                             selected = editorMode == "link",
                             onClick = { editorMode = "link" },
-                            text = { Text("Raw Config") }
+                            text = { Text(stringResource(R.string.raw_config)) }
                         )
                     }
 
                     if (editorMode == "form") {
                         // Protocol selector
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text("Protocol", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                            Text(stringResource(R.string.protocol), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -2132,7 +2551,7 @@ fun MainScreen(
                         OutlinedTextField(
                             value = editRemark,
                             onValueChange = { editRemark = it },
-                            label = { Text("Remark / Name") },
+                            label = { Text(stringResource(R.string.remark_name)) },
                             modifier = Modifier.fillMaxWidth(),
                             shape = ExpressiveButtonShape
                         )
@@ -2145,14 +2564,14 @@ fun MainScreen(
                             OutlinedTextField(
                                 value = editServer,
                                 onValueChange = { editServer = it },
-                                label = { Text("Server Address") },
+                                label = { Text(stringResource(R.string.server_address)) },
                                 modifier = Modifier.weight(2f),
                                 shape = ExpressiveButtonShape
                             )
                             OutlinedTextField(
                                 value = editPort,
                                 onValueChange = { editPort = it },
-                                label = { Text("Port") },
+                                label = { Text(stringResource(R.string.port)) },
                                 modifier = Modifier.weight(1f),
                                 shape = ExpressiveButtonShape
                             )
@@ -2162,7 +2581,7 @@ fun MainScreen(
                         OutlinedTextField(
                             value = editCreds,
                             onValueChange = { editCreds = it },
-                            label = { Text(if (editType == "vless") "UUID" else "Password / Credentials") },
+                            label = { Text(if (editType == "vless") stringResource(R.string.uuid) else stringResource(R.string.password_credentials)) },
                             modifier = Modifier.fillMaxWidth(),
                             shape = ExpressiveButtonShape
                         )
@@ -2175,7 +2594,7 @@ fun MainScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text("Enable TLS", fontWeight = FontWeight.Bold)
+                                Text(stringResource(R.string.enable_tls), fontWeight = FontWeight.Bold)
                                 Switch(
                                     checked = editTls || editType == "https",
                                     onCheckedChange = { if (editType != "https") editTls = it },
@@ -2187,10 +2606,135 @@ fun MainScreen(
                                 OutlinedTextField(
                                     value = editSni,
                                     onValueChange = { editSni = it },
-                                    label = { Text("SNI (Server Name)") },
+                                    label = { Text(stringResource(R.string.sni_server_name)) },
                                     modifier = Modifier.fillMaxWidth(),
                                     shape = ExpressiveButtonShape
                                 )
+                            }
+                        }
+
+                        // Advanced Settings Toggle
+                        Spacer(modifier = Modifier.height(6.dp))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Advanced Transport Settings",
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Switch(
+                                checked = editShowAdvanced,
+                                onCheckedChange = { editShowAdvanced = it }
+                            )
+                        }
+
+                        if (editShowAdvanced) {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                // Transport Type selector
+                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text("Transport Type", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        listOf("tcp", "ws", "grpc").forEach { trans ->
+                                            FilterChip(
+                                                selected = editTransportType == trans,
+                                                onClick = { editTransportType = trans },
+                                                label = { Text(trans.uppercase()) },
+                                                shape = ExpressiveChipShape
+                                            )
+                                        }
+                                    }
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        listOf("httpupgrade", "mkcp", "xhttp").forEach { trans ->
+                                            val label = if (trans == "mkcp") "mKCP" else trans
+                                            FilterChip(
+                                                selected = editTransportType == trans,
+                                                onClick = { editTransportType = trans },
+                                                label = { Text(label) },
+                                                shape = ExpressiveChipShape
+                                            )
+                                        }
+                                    }
+                                }
+
+                                if (editTransportType == "ws" || editTransportType == "httpupgrade" || editTransportType == "xhttp") {
+                                    OutlinedTextField(
+                                        value = editTransportPath,
+                                        onValueChange = { editTransportPath = it },
+                                        label = { Text("Path") },
+                                        placeholder = { Text("/") },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = ExpressiveButtonShape,
+                                        singleLine = true
+                                    )
+                                    OutlinedTextField(
+                                        value = editTransportHost,
+                                        onValueChange = { editTransportHost = it },
+                                        label = { Text("Host") },
+                                        placeholder = { Text("example.com") },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = ExpressiveButtonShape,
+                                        singleLine = true
+                                    )
+                                } else if (editTransportType == "grpc") {
+                                    OutlinedTextField(
+                                        value = editTransportServiceName,
+                                        onValueChange = { editTransportServiceName = it },
+                                        label = { Text("Service Name") },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = ExpressiveButtonShape,
+                                        singleLine = true
+                                    )
+                                } else if (editTransportType == "kcp" || editTransportType == "mkcp") {
+                                    OutlinedTextField(
+                                        value = editTransportSeed,
+                                        onValueChange = { editTransportSeed = it },
+                                        label = { Text("KCP Seed") },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = ExpressiveButtonShape,
+                                        singleLine = true
+                                    )
+                                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        Text("Header Type", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            listOf("none", "srtp", "utp").forEach { hType ->
+                                                FilterChip(
+                                                    selected = editTransportHeaderType == hType,
+                                                    onClick = { editTransportHeaderType = hType },
+                                                    label = { Text(hType) },
+                                                    shape = ExpressiveChipShape
+                                                )
+                                            }
+                                        }
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            listOf("wechat-video", "dtls", "wireguard").forEach { hType ->
+                                                FilterChip(
+                                                    selected = editTransportHeaderType == hType,
+                                                    onClick = { editTransportHeaderType = hType },
+                                                    label = { Text(hType) },
+                                                    shape = ExpressiveChipShape
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     } else {
@@ -2231,6 +2775,30 @@ fun MainScreen(
                                     } else if (editType == "https") {
                                         if (editSni.isNotEmpty()) queryList.add("sni=${java.net.URLEncoder.encode(editSni.trim(), "UTF-8")}")
                                     }
+
+                                    if (editShowAdvanced && editTransportType != "tcp") {
+                                        queryList.add("type=$editTransportType")
+                                        if (editTransportType == "ws" || editTransportType == "httpupgrade" || editTransportType == "xhttp") {
+                                            if (editTransportPath.isNotEmpty()) {
+                                                queryList.add("path=${java.net.URLEncoder.encode(editTransportPath.trim(), "UTF-8")}")
+                                            }
+                                            if (editTransportHost.isNotEmpty()) {
+                                                queryList.add("host=${java.net.URLEncoder.encode(editTransportHost.trim(), "UTF-8")}")
+                                            }
+                                        } else if (editTransportType == "grpc") {
+                                            if (editTransportServiceName.isNotEmpty()) {
+                                                queryList.add("serviceName=${java.net.URLEncoder.encode(editTransportServiceName.trim(), "UTF-8")}")
+                                            }
+                                        } else if (editTransportType == "kcp" || editTransportType == "mkcp") {
+                                            if (editTransportSeed.isNotEmpty()) {
+                                                queryList.add("seed=${java.net.URLEncoder.encode(editTransportSeed.trim(), "UTF-8")}")
+                                            }
+                                            if (editTransportHeaderType.isNotEmpty()) {
+                                                queryList.add("headerType=${java.net.URLEncoder.encode(editTransportHeaderType.trim(), "UTF-8")}")
+                                            }
+                                        }
+                                    }
+
                                     val queryStr = if (queryList.isNotEmpty()) "?" + queryList.joinToString("&") else ""
                                     val remarkStr = if (finalRemark.isNotEmpty()) "#" + java.net.URLEncoder.encode(finalRemark, "UTF-8") else ""
                                     val protocolScheme = editType
@@ -2269,7 +2837,7 @@ fun MainScreen(
                     modifier = Modifier.pressScaleEffect(),
                     shape = ExpressiveButtonShape
                 ) {
-                    Text("Save")
+                    Text(stringResource(R.string.save))
                 }
             },
             dismissButton = {
@@ -2277,7 +2845,7 @@ fun MainScreen(
                     onClick = { editingNodeLink = null },
                     modifier = Modifier.pressScaleEffect()
                 ) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.cancel))
                 }
             },
             shape = ExpressiveCardShape
@@ -2296,6 +2864,407 @@ fun MainScreen(
             }
         )
     }
+
+    AnimatedVisibility(
+        visible = isNodesExpanded,
+        enter = slideInVertically(initialOffsetY = { it }, animationSpec = tween(400, easing = FastOutSlowInEasing)) + fadeIn(),
+        exit = slideOutVertically(targetOffsetY = { it }, animationSpec = tween(350, easing = FastOutSlowInEasing)) + fadeOut()
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .statusBarsPadding()
+                    .navigationBarsPadding()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(
+                        onClick = { isNodesExpanded = false },
+                        modifier = Modifier.pressScaleEffect()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = stringResource(R.string.back),
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = stringResource(R.string.available_nodes),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    IconButton(
+                        onClick = {
+                            isSearchVisible = !isSearchVisible
+                            if (!isSearchVisible) searchQuery = ""
+                        },
+                        modifier = Modifier.pressScaleEffect()
+                    ) {
+                        Icon(
+                            imageVector = if (isSearchVisible) Icons.Default.SearchOff else Icons.Default.Search,
+                            contentDescription = stringResource(R.string.search),
+                            tint = if (isSearchVisible) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    IconButton(
+                        onClick = {
+                            if (!isTestingPings) {
+                                scope.launch {
+                                    isTestingPings = true
+                                    val jobs = serverList.map { link ->
+                                        scope.async(Dispatchers.IO) {
+                                            val hostPort = getHostAndPortFromLink(link)
+                                            val ping = if (hostPort != null) {
+                                                measurePingDelay(hostPort.first, hostPort.second)
+                                            } else {
+                                                -1
+                                            }
+                                            link to ping
+                                        }
+                                    }
+                                    val results = jobs.awaitAll()
+                                    pingsMap = pingsMap + results.toMap()
+                                    isTestingPings = false
+                                }
+                            }
+                        },
+                        enabled = !isTestingPings,
+                        modifier = Modifier.pressScaleEffect()
+                    ) {
+                        if (isTestingPings) {
+                            LoadingIndicator(
+                                modifier = Modifier.size(20.dp),
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.Speed,
+                                contentDescription = stringResource(R.string.test_pings),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                }
+
+                AnimatedVisibility(
+                    visible = isSearchVisible,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
+                ) {
+                    Column {
+                        OutlinedTextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            placeholder = { Text(stringResource(R.string.search_placeholder)) },
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                            shape = ExpressiveButtonShape,
+                            singleLine = true,
+                            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                            trailingIcon = {
+                                if (searchQuery.isNotEmpty()) {
+                                    IconButton(onClick = { searchQuery = "" }) {
+                                        Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.clear), modifier = Modifier.size(18.dp))
+                                    }
+                                }
+                            }
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                }
+
+                if (subscriptions.size > 1) {
+                    LazyRow(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(subscriptions) { sub ->
+                            val isSelected = activeSubId == sub.id
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = {
+                                    scope.launch {
+                                        settingsManager.setActiveSubId(sub.id)
+                                    }
+                                },
+                                label = { Text(sub.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                                shape = ExpressiveChipShape
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+
+                ScrollableTabRow(
+                    selectedTabIndex = selectedTab,
+                    edgePadding = 16.dp,
+                    containerColor = Color.Transparent,
+                    contentColor = MaterialTheme.colorScheme.primary,
+                    indicator = { tabPositions ->
+                        if (selectedTab < tabPositions.size) {
+                            TabRowDefaults.SecondaryIndicator(
+                                Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    },
+                    divider = {}
+                ) {
+                    listOf(stringResource(R.string.tab_all), "VLESS", "Trojan", "Shadowsocks").forEachIndexed { index, title ->
+                        Tab(
+                            selected = selectedTab == index,
+                            onClick = { selectedTab = index },
+                            text = {
+                                Text(
+                                    text = title,
+                                    fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal,
+                                    fontSize = 14.sp
+                                )
+                            }
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                if (filteredServerList.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = stringResource(R.string.no_matching_nodes),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .padding(horizontal = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        itemsIndexed(filteredServerList, key = { _, item -> item.link }) { index, serverItem ->
+                            val serverLink = serverItem.link
+                            val isSelected = activeProfile == serverLink
+                            val name = serverItem.name
+                            val type = serverItem.type
+
+                            val tagContainerColor = when (type) {
+                                "VLESS" -> MaterialTheme.colorScheme.primaryContainer
+                                "TROJAN" -> MaterialTheme.colorScheme.secondaryContainer
+                                else -> MaterialTheme.colorScheme.tertiaryContainer
+                            }
+                            val tagTextColor = when (type) {
+                                "VLESS" -> MaterialTheme.colorScheme.onPrimaryContainer
+                                "TROJAN" -> MaterialTheme.colorScheme.onSecondaryContainer
+                                else -> MaterialTheme.colorScheme.onTertiaryContainer
+                            }
+
+                            Row(
+                                modifier = Modifier
+                                    .animateItem()
+                                    .fillMaxWidth()
+                                    .clip(ExpressiveButtonShape)
+                                    .background(
+                                        if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+                                        else Color.Transparent
+                                    )
+                                    .border(
+                                        width = 1.dp,
+                                        color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.4f) else Color.Transparent,
+                                        shape = ExpressiveButtonShape
+                                    )
+                                    .clickable {
+                                        scope.launch {
+                                            settingsManager.setActiveProfile(serverLink)
+                                            if (vpnState == "CONNECTED") {
+                                                startVpnService(context)
+                                            }
+                                        }
+                                    }
+                                    .padding(horizontal = 12.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .background(
+                                            if (isSelected) MaterialTheme.colorScheme.primary
+                                            else MaterialTheme.colorScheme.surfaceVariant
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = if (isSelected) Icons.Default.Check else Icons.Default.Hub,
+                                        contentDescription = null,
+                                        tint = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(16.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = name,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(ExpressiveChipShape)
+                                                .background(tagContainerColor)
+                                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                                        ) {
+                                            Text(
+                                                text = type,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = tagTextColor,
+                                                fontWeight = FontWeight.Bold,
+                                                maxLines = 1,
+                                                softWrap = false
+                                            )
+                                        }
+
+                                        Spacer(modifier = Modifier.width(12.dp))
+
+                                        val ping = pingsMap[serverLink]
+                                        if (ping != null) {
+                                            val isTimeout = ping < 0
+                                            val pingColor = when {
+                                                isTimeout -> Color(0xFFF44336)
+                                                ping < 60 -> Color(0xFF4CAF50)
+                                                ping < 120 -> Color(0xFFFFB300)
+                                                else -> Color(0xFFF44336)
+                                            }
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(6.dp)
+                                                    .clip(CircleShape)
+                                                    .background(pingColor)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = if (isTimeout) "Timeout" else "${ping} ms",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = pingColor,
+                                                fontWeight = FontWeight.Bold,
+                                                maxLines = 1,
+                                                softWrap = false
+                                            )
+                                        } else {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(6.dp)
+                                                    .clip(CircleShape)
+                                                    .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = stringResource(R.string.untested),
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 1,
+                                                softWrap = false
+                                            )
+                                        }
+                                    }
+                                }
+
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    IconButton(
+                                        onClick = {
+                                            val sendIntent = Intent().apply {
+                                                action = Intent.ACTION_SEND
+                                                putExtra(Intent.EXTRA_TEXT, serverLink)
+                                                this.type = "text/plain"
+                                            }
+                                            val shareIntent = Intent.createChooser(sendIntent, context.getString(R.string.share_config))
+                                            context.startActivity(shareIntent)
+                                        },
+                                        modifier = Modifier.size(36.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Share,
+                                            contentDescription = stringResource(R.string.share_config),
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+
+                                    if (activeSubId == "manual") {
+                                        IconButton(
+                                            onClick = {
+                                                editingNodeLink = serverLink
+                                                editLinkInput = serverLink
+                                            },
+                                            modifier = Modifier.size(36.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Edit,
+                                                contentDescription = stringResource(R.string.edit_config),
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+
+                                        IconButton(
+                                            onClick = {
+                                                scope.launch {
+                                                    val updatedManualList = serverList.filter { it != serverLink }
+                                                    val updatedManualStr = updatedManualList.joinToString("\n")
+                                                    settingsManager.setManualServers(updatedManualStr)
+                                                    if (isSelected) {
+                                                        val nextActive = updatedManualList.firstOrNull() ?: ""
+                                                        settingsManager.setActiveProfile(nextActive)
+                                                        if (vpnState == "CONNECTED" && nextActive.isNotEmpty()) {
+                                                            startVpnService(context)
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            modifier = Modifier.size(36.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Delete,
+                                                contentDescription = stringResource(R.string.delete_config),
+                                                tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
     }
 }
 
@@ -2303,6 +3272,8 @@ fun MainScreen(
 @Composable
 fun ConnectionDashboard(
     state: String,
+    cardStyle: String,
+    isDark: Boolean,
     onConnectToggle: () -> Unit
 ) {
     val context = LocalContext.current
@@ -2428,22 +3399,90 @@ fun ConnectionDashboard(
         }
     }
 
-    val isDark = isSystemInDarkTheme()
+    val cardBackground = if (isDark) Color.Black else Color(0xFFF7F9FB)
     val primaryColor = MaterialTheme.colorScheme.primary
     val secondaryColor = MaterialTheme.colorScheme.secondary
-    val cardBorderBrush = remember(isDark, primaryColor, secondaryColor) {
-        Brush.linearGradient(
-            colors = listOf(
-                primaryColor.copy(alpha = if (isDark) 0.22f else 0.18f),
-                secondaryColor.copy(alpha = if (isDark) 0.08f else 0.06f)
+    val tertiaryColor = MaterialTheme.colorScheme.tertiary
+    val surfaceContainerHigh = MaterialTheme.colorScheme.surfaceContainerHigh
+    val outlineVariant = MaterialTheme.colorScheme.outlineVariant
+    val primaryContainer = MaterialTheme.colorScheme.primaryContainer
+
+    val cardBorderBrush = remember(isDark, cardStyle, primaryColor, secondaryColor, outlineVariant) {
+        if (cardStyle == "solid") {
+            SolidColor(outlineVariant)
+        } else {
+            val colors = listOf(
+                primaryColor.copy(alpha = if (isDark) 0.60f else 0.18f),
+                secondaryColor.copy(alpha = if (isDark) 0.40f else 0.06f)
             )
-        )
+            Brush.linearGradient(colors = colors)
+        }
+    }
+
+    val primaryCardBrush = remember(isDark, cardStyle, primaryColor, secondaryColor, surfaceContainerHigh) {
+        if (cardStyle == "solid") {
+            SolidColor(surfaceContainerHigh)
+        } else {
+            val colors = if (isDark) {
+                listOf(
+                    primaryColor.copy(alpha = 0.55f),
+                    secondaryColor.copy(alpha = 0.28f)
+                )
+            } else {
+                listOf(
+                    primaryColor.copy(alpha = 0.18f),
+                    surfaceContainerHigh
+                )
+            }
+            Brush.linearGradient(colors = colors)
+        }
+    }
+
+    // Active Card background animation (alive and pulsing flow)
+    val infiniteTransition = rememberInfiniteTransition(label = "ActiveCardDashboardTransition")
+    val flowOffset by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1000f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 6000, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "flowOffset"
+    )
+
+    val activeCardBackgroundBrush = remember(isDark, cardStyle, primaryColor, secondaryColor, tertiaryColor, primaryContainer, flowOffset) {
+        if (cardStyle == "solid") {
+            SolidColor(primaryContainer)
+        } else {
+            val colors = if (isDark) {
+                listOf(
+                    primaryColor.copy(alpha = 0.68f),
+                    secondaryColor.copy(alpha = 0.50f),
+                    tertiaryColor.copy(alpha = 0.30f)
+                )
+            } else {
+                listOf(
+                    primaryColor.copy(alpha = 0.25f),
+                    secondaryColor.copy(alpha = 0.15f),
+                    Color.White
+                )
+            }
+            Brush.linearGradient(
+                colors = colors,
+                start = Offset(flowOffset - 500f, 0f),
+                end = Offset(flowOffset + 500f, 1000f)
+            )
+        }
     }
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
+            .background(
+                brush = if (state == "CONNECTED" || state == "CONNECTING") activeCardBackgroundBrush else primaryCardBrush,
+                shape = ExpressiveCardShape
+            )
             .border(
                 width = 1.dp,
                 brush = cardBorderBrush,
@@ -2451,7 +3490,7 @@ fun ConnectionDashboard(
             ),
         shape = ExpressiveCardShape,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = Color.Transparent
         )
     ) {
         Column(
@@ -2502,7 +3541,7 @@ fun ConnectionDashboard(
                     } else {
                         Icon(
                             imageVector = if (state == "CONNECTED") Icons.Default.Shield else Icons.Default.PowerSettingsNew,
-                            contentDescription = "Connect Toggle",
+                            contentDescription = stringResource(R.string.connect_toggle),
                             tint = buttonIconColor,
                             modifier = Modifier.size(40.dp)
                         )
@@ -2693,7 +3732,7 @@ private suspend fun fetchSubscription(urlStr: String): List<String> = kotlinx.co
     }
 }
 
-private fun getProxyName(link: String): String {
+private fun getProxyName(link: String, context: Context): String {
     val hashIdx = link.indexOf("#")
     return if (hashIdx >= 0) {
         try {
@@ -2708,7 +3747,7 @@ private fun getProxyName(link: String): String {
             val scheme = link.substringBefore("://").uppercase()
             "$scheme ($host)"
         } catch (e: Exception) {
-            "Unnamed Proxy Node"
+            context.getString(R.string.notif_unnamed)
         }
     }
 }
@@ -3143,6 +4182,8 @@ fun PawPrint(
 @Composable
 private fun LogsConsole(
     context: Context,
+    cardStyle: String,
+    isDark: Boolean,
     modifier: Modifier = Modifier
 ) {
     val vpnLogs by VpnServiceWrapper.vpnLogs.collectAsStateWithLifecycle()
@@ -3154,16 +4195,44 @@ private fun LogsConsole(
         }
     }
     
-    val isDark = isSystemInDarkTheme()
+    val cardBackground = if (isDark) Color.Black else Color(0xFFF7F9FB)
     val primaryColor = MaterialTheme.colorScheme.primary
     val secondaryColor = MaterialTheme.colorScheme.secondary
-    val cardBorderBrush = remember(isDark, primaryColor, secondaryColor) {
-        Brush.linearGradient(
-            colors = listOf(
-                primaryColor.copy(alpha = if (isDark) 0.22f else 0.18f),
-                secondaryColor.copy(alpha = if (isDark) 0.08f else 0.06f)
+    val tertiaryColor = MaterialTheme.colorScheme.tertiary
+    val surfaceContainerHigh = MaterialTheme.colorScheme.surfaceContainerHigh
+
+    val outlineVariant = MaterialTheme.colorScheme.outlineVariant
+    val surfaceContainerLow = MaterialTheme.colorScheme.surfaceContainerLow
+
+    val cardBorderBrush = remember(isDark, cardStyle, primaryColor, secondaryColor, outlineVariant) {
+        if (cardStyle == "solid") {
+            SolidColor(outlineVariant)
+        } else {
+            val colors = listOf(
+                primaryColor.copy(alpha = if (isDark) 0.60f else 0.18f),
+                secondaryColor.copy(alpha = if (isDark) 0.40f else 0.06f)
             )
-        )
+            Brush.linearGradient(colors = colors)
+        }
+    }
+
+    val tertiaryCardBrush = remember(isDark, cardStyle, tertiaryColor, primaryColor, surfaceContainerLow) {
+        if (cardStyle == "solid") {
+            SolidColor(surfaceContainerLow)
+        } else {
+            val colors = if (isDark) {
+                listOf(
+                    tertiaryColor.copy(alpha = 0.55f),
+                    primaryColor.copy(alpha = 0.28f)
+                )
+            } else {
+                listOf(
+                    tertiaryColor.copy(alpha = 0.18f),
+                    surfaceContainerHigh
+                )
+            }
+            Brush.linearGradient(colors = colors)
+        }
     }
 
     Card(
@@ -3171,6 +4240,7 @@ private fun LogsConsole(
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
             .height(280.dp)
+            .background(brush = tertiaryCardBrush, shape = ExpressiveCardShape)
             .border(
                 width = 1.dp,
                 brush = cardBorderBrush,
@@ -3178,7 +4248,7 @@ private fun LogsConsole(
             ),
         shape = ExpressiveCardShape,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer
+            containerColor = Color.Transparent
         )
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
@@ -3196,7 +4266,7 @@ private fun LogsConsole(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Engine Logs",
+                        text = stringResource(R.string.engine_logs),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontWeight = FontWeight.Bold,
                         fontFamily = FontFamily.Monospace,
@@ -3212,14 +4282,14 @@ private fun LogsConsole(
                         },
                         modifier = Modifier.pressScaleEffect()
                     ) {
-                        Text("Copy")
+                        Text(stringResource(R.string.copy))
                     }
                     Spacer(modifier = Modifier.width(4.dp))
                     TextButton(
                         onClick = { VpnServiceWrapper.clearLogs() },
                         modifier = Modifier.pressScaleEffect()
                     ) {
-                        Text("Clear")
+                        Text(stringResource(R.string.clear))
                     }
                 }
             }
@@ -3241,7 +4311,7 @@ private fun LogsConsole(
                 if (logLines.isEmpty()) {
                     item {
                         Text(
-                            text = "Logs will output here...",
+                            text = stringResource(R.string.logs_placeholder),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 11.sp,
                             fontFamily = FontFamily.Monospace,

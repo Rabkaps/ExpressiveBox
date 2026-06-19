@@ -65,6 +65,9 @@ object ConfigInjector {
             // 4. Inject direct/block outbounds
             injectOutbounds(configJson, settings)
 
+            // 5. Pre-resolve proxy server domains to raw IPs to bypass DNS hijacking
+            preResolveProxyServers(context, configJson, settings)
+
             return configJson.toString(2)
         } catch (e: Exception) {
             e.printStackTrace()
@@ -179,6 +182,12 @@ object ConfigInjector {
 
         val directServer = createDnsServer("dns-direct", directDnsAddr, null)
         servers.put(directServer)
+
+        // 3. Clean Bootstrap DNS Server for resolving proxy/DNS hostnames reliably (without carrier hijacking)
+        val bootstrapDnsAddr = if (settings.bypassIran) "178.22.122.100" else "1.1.1.1"
+        val bootstrapServer = createDnsServer("dns-bootstrap", bootstrapDnsAddr, null)
+        servers.put(bootstrapServer)
+
         dns.put("servers", servers)
 
         val rules = JSONArray()
@@ -200,7 +209,7 @@ object ConfigInjector {
         if (directDomains.isNotEmpty()) {
             val bootstrapRule = JSONObject().apply {
                 put("domain", JSONArray(directDomains))
-                put("server", "dns-direct")
+                put("server", "dns-bootstrap")
             }
             rules.put(bootstrapRule)
         }
@@ -313,6 +322,10 @@ object ConfigInjector {
         }
         if (directDnsAddr.isNotEmpty() && isIpAddress(directDnsAddr)) {
             directIps.add(directDnsAddr)
+        }
+        val bootstrapDnsAddr = if (settings.bypassIran) "178.22.122.100" else "1.1.1.1"
+        if (bootstrapDnsAddr.isNotEmpty() && isIpAddress(bootstrapDnsAddr)) {
+            directIps.add(bootstrapDnsAddr)
         }
 
         for (host in proxyHosts) {
@@ -520,7 +533,7 @@ object ConfigInjector {
 
                 // Flow control (only allowed for standard TCP transport in sing-box)
                 val type = queryParams["type"]
-                if (type != "ws" && type != "grpc") {
+                if (type != "ws" && type != "grpc" && type != "kcp" && type != "mkcp" && type != "httpupgrade") {
                     queryParams["flow"]?.let { outbound.put("flow", it) }
                 }
 
@@ -692,9 +705,13 @@ object ConfigInjector {
 
     private fun injectTransport(outbound: JSONObject, queryParams: Map<String, String>) {
         val type = queryParams["type"] ?: return
-        if (type == "ws" || type == "grpc" || type == "httpupgrade" || type == "xhttp") {
+        if (type == "ws" || type == "grpc" || type == "httpupgrade" || type == "xhttp" || type == "kcp" || type == "mkcp") {
             val transport = JSONObject()
-            transport.put("type", type)
+            if (type == "kcp" || type == "mkcp") {
+                transport.put("type", "kcp")
+            } else {
+                transport.put("type", type)
+            }
             if (type == "ws") {
                 val path = queryParams["path"] ?: "/"
                 transport.put("path", path)
@@ -712,9 +729,22 @@ object ConfigInjector {
                 transport.put("path", path)
                 val host = queryParams["host"] ?: queryParams["sni"]
                 if (host != null && host.isNotEmpty()) {
+                    transport.put("host", host)
                     val headers = JSONObject()
                     headers.put("Host", host)
                     transport.put("headers", headers)
+                }
+            } else if (type == "kcp" || type == "mkcp") {
+                val seed = queryParams["seed"]
+                if (seed != null && seed.isNotEmpty()) {
+                    transport.put("seed", seed)
+                }
+                val headerType = queryParams["headerType"] ?: queryParams["header_type"] ?: queryParams["header"]
+                if (headerType != null && headerType.isNotEmpty()) {
+                    transport.put("header_type", headerType)
+                    val headerObj = JSONObject()
+                    headerObj.put("type", headerType)
+                    transport.put("header", headerObj)
                 }
             } else if (type == "xhttp") {
                 val path = queryParams["path"] ?: "/"
@@ -774,5 +804,166 @@ object ConfigInjector {
         val ipv4Pattern = "^([0-9]{1,3}\\.){3}[0-9]{1,3}$"
         val ipv6Pattern = "^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}$"
         return host.matches(ipv4Pattern.toRegex()) || host.matches(ipv6Pattern.toRegex())
+    }
+
+    private fun preResolveProxyServers(context: Context, config: JSONObject, settings: InjectorSettings) {
+        val outbounds = config.optJSONArray("outbounds") ?: return
+        for (i in 0 until outbounds.length()) {
+            val outbound = outbounds.optJSONObject(i) ?: continue
+            val tag = outbound.optString("tag")
+            if (tag == "proxy") {
+                val server = outbound.optString("server")
+                if (server.isNotEmpty() && !isIpAddress(server)) {
+                    android.util.Log.i("ExpressiveBox", "Pre-resolving proxy server domain: $server")
+                    val resolvedIp = resolveDomainWithFallbacks(server, settings.bypassIran)
+                    if (resolvedIp != null) {
+                        android.util.Log.i("ExpressiveBox", "Proxy server $server successfully pre-resolved to IP: $resolvedIp")
+                        
+                        // If outbound has TLS enabled, ensure SNI (server_name) is set to original hostname
+                        val tls = outbound.optJSONObject("tls")
+                        if (tls != null) {
+                            if (tls.optBoolean("enabled", false) && !tls.has("server_name")) {
+                                tls.put("server_name", server)
+                            }
+                        }
+                        
+                        // Overwrite server domain with the resolved IP
+                        outbound.put("server", resolvedIp)
+                    } else {
+                        android.util.Log.w("ExpressiveBox", "Failed to pre-resolve proxy server: $server. Falling back to default routing.")
+                    }
+                }
+            }
+        }
+    }
+
+    private fun resolveDomainWithFallbacks(domain: String, bypassIran: Boolean): String? {
+        val dnsServers = if (bypassIran) {
+            // For Iran: prioritize clean domestic resolvers that bypass censorship/sanctions, then Cloudflare
+            listOf("185.51.200.2", "178.22.122.100", "10.202.10.10", "1.1.1.1", "8.8.8.8")
+        } else {
+            // Outside Iran: prioritize Cloudflare, Google, then Shecan
+            listOf("1.1.1.1", "8.8.8.8", "9.9.9.9", "178.22.122.100")
+        }
+
+        for (dnsServer in dnsServers) {
+            val ip = resolveDomainDirectly(domain, dnsServer)
+            if (ip != null) {
+                return ip
+            }
+        }
+
+        // Final fallback: try system DNS (may be hijacked, but better than nothing)
+        try {
+            val addresses = java.net.InetAddress.getAllByName(domain)
+            for (addr in addresses) {
+                val ip = addr.hostAddress
+                if (ip != null && !ip.startsWith("127.") && ip != "10.10.34.34" && ip != "10.10.34.35" && ip != "10.10.34.36") {
+                    return ip
+                }
+            }
+        } catch (e: Exception) {}
+
+        return null
+    }
+
+    private fun resolveDomainDirectly(domain: String, dnsServerIp: String, timeoutMs: Int = 2000): String? {
+        try {
+            val socket = java.net.DatagramSocket()
+            socket.soTimeout = timeoutMs
+            val address = java.net.InetAddress.getByName(dnsServerIp)
+
+            val baos = java.io.ByteArrayOutputStream()
+            val dos = java.io.DataOutputStream(baos)
+
+            // DNS Header
+            dos.writeShort(0x1234) // Transaction ID
+            dos.writeShort(0x0100) // Flags: Standard Query
+            dos.writeShort(1)      // Questions
+            dos.writeShort(0)      // Answer RRs
+            dos.writeShort(0)      // Authority RRs
+            dos.writeShort(0)      // Additional RRs
+
+            // Question: Domain Name
+            val parts = domain.split(".")
+            for (part in parts) {
+                val bytes = part.toByteArray(java.nio.charset.StandardCharsets.UTF_8)
+                dos.writeByte(bytes.size)
+                dos.write(bytes)
+            }
+            dos.writeByte(0) // End of domain
+
+            dos.writeShort(1) // Type A
+            dos.writeShort(1) // Class IN
+
+            val queryData = baos.toByteArray()
+            val packet = java.net.DatagramPacket(queryData, queryData.size, address, 53)
+            socket.send(packet)
+
+            val buffer = ByteArray(512)
+            val responsePacket = java.net.DatagramPacket(buffer, buffer.size)
+            socket.receive(responsePacket)
+            socket.close()
+
+            // Parse Response
+            val response = responsePacket.data
+            val length = responsePacket.length
+            if (length < 12) return null
+
+            val responseStream = java.io.DataInputStream(java.io.ByteArrayInputStream(response, 0, length))
+            val txId = responseStream.readUnsignedShort()
+            val flags = responseStream.readUnsignedShort()
+            val questions = responseStream.readUnsignedShort()
+            val answers = responseStream.readUnsignedShort()
+            val authority = responseStream.readUnsignedShort()
+            val additional = responseStream.readUnsignedShort()
+
+            // Skip Question Section
+            for (q in 0 until questions) {
+                // Skip domain labels
+                var len = responseStream.readByte().toInt()
+                while (len > 0) {
+                    responseStream.skipBytes(len)
+                    len = responseStream.readByte().toInt()
+                }
+                responseStream.skipBytes(4) // Skip Type and Class
+            }
+
+            // Parse Answers
+            for (a in 0 until answers) {
+                // Name: skip compressed name pointer or labels
+                var b = responseStream.readByte().toInt() and 0xFF
+                while (b > 0) {
+                    if ((b and 0xC0) == 0xC0) {
+                        // Pointer: skip the second byte of the pointer and end
+                        responseStream.readByte()
+                        break
+                    } else {
+                        responseStream.skipBytes(b)
+                        b = responseStream.readByte().toInt() and 0xFF
+                    }
+                }
+
+                val type = responseStream.readUnsignedShort()
+                val clazz = responseStream.readUnsignedShort()
+                val ttl = responseStream.readInt()
+                val dataLength = responseStream.readUnsignedShort()
+
+                if (type == 1 && dataLength == 4) { // Type A (IPv4)
+                    val ipBytes = ByteArray(4)
+                    responseStream.readFully(ipBytes)
+                    val ip = "${ipBytes[0].toInt() and 0xFF}.${ipBytes[1].toInt() and 0xFF}.${ipBytes[2].toInt() and 0xFF}.${ipBytes[3].toInt() and 0xFF}"
+                    // Verify the resolved IP is not a known hijacked IP
+                    if (ip != "10.10.34.34" && ip != "10.10.34.35" && ip != "10.10.34.36" && !ip.startsWith("127.")) {
+                        return ip
+                    }
+                } else {
+                    responseStream.skipBytes(dataLength)
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("ExpressiveBox", "DNS query to $dnsServerIp failed: ${e.message}")
+        }
+        return null
     }
 }

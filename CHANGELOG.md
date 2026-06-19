@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2026-06-19
+
+### Added
+- **Material 3 Expressive Animation & Transitions**: Added custom wavy circular progress indicators (`CircularWavyProgressIndicator`), pulsing connection status dot inside dashboard pills, and horizontal tab transition scaling and fade effects.
+- **Swipeable Bottom Navigation**: Fully integrated `HorizontalPager` to allow users to swipe between Home, Configs, Logs, and Settings tabs smoothly.
+- **DNS Poisoning & Hijacking Mitigation**: Implemented a kotlin-layer parallel DNS pre-resolver using public/secure DNS endpoints to bypass carrier DNS poisoning, injecting resolved IP directly into configurations.
+- **Advanced Transport Protocol Creator/Editor**: Added transport configuration parameters inside the app creator/editor for VLESS, Trojan, and Shadowsocks protocols, supporting WebSocket, gRPC, mKCP, and HTTPUpgrade.
+- **Translucent Popup Activity (`NodesPopupActivity`)**: Created a translucent overlay dialog activity launched directly from the connection status notification "List" action to display configurations, search, pings, and sub selector on top of other apps.
+- **Subscription Auto-Connect & Selector**:
+  - Auto-Connect: Evaluates latency of all servers in the active subscription in parallel on connection startup and connects to the one with the lowest delay.
+  - Subscription Selector: Added a horizontal scrollable row of chips to easily switch between subscriptions on both the main screen nodes overlay and the popup dialog.
+- **Improved Connection Notification visibility**: Re-configured standard notifications to use a default importance channel (`vpn_service_channel_v2`) and builder priority, keeping action buttons ("List" and "Disconnect") visible without being collapsed or hidden in silent sections.
+
+### Fixed
+- **Stuck Tab Animations**: Resolved a visual glitch where rapid tab jumps or jumps across non-adjacent tabs (e.g. Home to Logs) would cause the animated screen to get stuck in a scaled-down, faded-out intermediate state. Moved visual transforms inside the `graphicsLayer` lambda draw phase.
+- **Live Stats Default Value**: Reconfigured default settings so that the live stats speed indicators are disabled by default.
+
 ## [1.0.69] - 2026-06-16
 
 ### Fixed
