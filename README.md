@@ -5,7 +5,7 @@ ExpressiveBox is a modern, high-performance VPN client for Android built entirel
 > [!NOTE]
 > **Project Status**: ExpressiveBox is currently in its **active testing stage**. It supports standard subscription/profile parsing, custom DNS rules, split tunneling, and core connectivity using modern secure protocols (VLESS, Trojan, Shadowsocks, SOCKS5, HTTP, and HTTPS).
 > 
-> * **Persian (Farsi) language support is coming soon!**
+> * **Full Persian (Farsi) translation and RTL support** is natively integrated across all screens, dialogs, settings, and connection details.
 
 ---
 
