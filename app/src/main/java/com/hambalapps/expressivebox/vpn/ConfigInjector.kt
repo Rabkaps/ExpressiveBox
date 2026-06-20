@@ -21,7 +21,8 @@ data class InjectorSettings(
     val vpnMode: String = "standard",
     val warpPrivateKey: String = "",
     val warpPublicKey: String = "",
-    val warpIpAddress: String = ""
+    val warpIpAddress: String = "",
+    val vpnModeTunnelGames: Boolean = false
 )
 
 object ConfigInjector {
@@ -169,7 +170,7 @@ object ConfigInjector {
             serverObj.put("type", "tls")
             serverObj.put("server", trimmed.substringAfter("tls://"))
         } else if (trimmed.startsWith("tcp://")) {
-            serverObj.put("type", "tls")
+            serverObj.put("type", "tcp")
             serverObj.put("server", trimmed.substringAfter("tcp://"))
         } else if (trimmed.startsWith("quic://")) {
             serverObj.put("type", "quic")
@@ -212,8 +213,16 @@ object ConfigInjector {
         servers.put(bootstrapServer)
 
         if (settings.vpnMode == "gaming") {
-            val radarServer = createDnsServer("dns-radar", "185.51.200.2", null)
-            val electroServer = createDnsServer("dns-electro", "78.157.42.100", null)
+            val radarServer = if (settings.vpnModeTunnelGames) {
+                createDnsServer("dns-radar", "185.51.200.2", "proxy")
+            } else {
+                createDnsServer("dns-radar", "tcp://185.51.200.2", null)
+            }
+            val electroServer = if (settings.vpnModeTunnelGames) {
+                createDnsServer("dns-electro", "78.157.42.100", "proxy")
+            } else {
+                createDnsServer("dns-electro", "tcp://78.157.42.100", null)
+            }
             servers.put(radarServer)
             servers.put(electroServer)
         }
@@ -442,7 +451,7 @@ object ConfigInjector {
         if (settings.vpnMode == "gaming") {
             val gameRouteRule = JSONObject().apply {
                 put("domain", JSONArray(gamingDomains))
-                put("outbound", "direct")
+                put("outbound", if (settings.vpnModeTunnelGames) "proxy" else "direct")
             }
             newRules.put(gameRouteRule)
         } else if (settings.vpnMode == "ai_bypass") {

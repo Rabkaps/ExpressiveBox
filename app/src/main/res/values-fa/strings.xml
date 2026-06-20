@@ -179,5 +179,7 @@
     <string name="mode_ai_bypass">دور زدن تحریم AI (کلودفلر Warp)</string>
     <string name="registering_warp">در حال ثبت اکانت Cloudflare WARP...</string>
     <string name="warp_failed">ثبت اکانت WARP ناموفق بود. اتصال را بررسی کنید.</string>
+    <string name="tunnel_games_title">عبور بازی‌ها از VPN</string>
+    <string name="tunnel_games_desc">هدایت ترافیک بازی‌ها از طریق سرور VPN. در صورت غیرفعال بودن، از اتصال مستقیم با دی‌ان‌اس گیم (الکترو/رادار) استفاده می‌شود.</string>
 </resources>
 

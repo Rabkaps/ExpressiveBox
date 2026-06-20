@@ -133,6 +133,7 @@ fun MainScreen(
     val warpPrivateKey = settings.warpPrivateKey
     val warpPublicKey = settings.warpPublicKey
     val warpIpAddress = settings.warpIpAddress
+    val vpnModeTunnelGames = settings.vpnModeTunnelGames
 
     val subscriptions = settings.deserializedSubscriptions
     val activeSubscription = remember(subscriptions, activeSubId) {
@@ -238,7 +239,7 @@ fun MainScreen(
 
     // Observe VPN state and logs
     val vpnState by VpnServiceWrapper.vpnState.collectAsStateWithLifecycle()
-    var appVersion by remember { mutableStateOf("v1.6.0") }
+    var appVersion by remember { mutableStateOf("v1.6.1") }
     LaunchedEffect(Unit) {
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             try {
@@ -248,7 +249,7 @@ fun MainScreen(
                     @Suppress("DEPRECATION")
                     context.packageManager.getPackageInfo(context.packageName, 0)
                 }
-                val version = "v${pInfo.versionName ?: "1.6.0"}"
+                val version = "v${pInfo.versionName ?: "1.6.1"}"
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                     appVersion = version
                 }
@@ -830,6 +831,49 @@ fun MainScreen(
                                                             else MaterialTheme.colorScheme.onSurfaceVariant,
                                                     maxLines = 1,
                                                     overflow = TextOverflow.Ellipsis
+                                                )
+                                            }
+                                        }
+                                    }
+                                    
+                                    AnimatedVisibility(
+                                        visible = vpnMode == "gaming",
+                                        enter = expandVertically() + fadeIn(),
+                                        exit = shrinkVertically() + fadeOut()
+                                    ) {
+                                        Column {
+                                            Spacer(modifier = Modifier.height(16.dp))
+                                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                            Spacer(modifier = Modifier.height(16.dp))
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text(
+                                                        text = stringResource(R.string.tunnel_games_title),
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = MaterialTheme.colorScheme.onSurface
+                                                    )
+                                                    Text(
+                                                        text = stringResource(R.string.tunnel_games_desc),
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                }
+                                                Spacer(modifier = Modifier.width(16.dp))
+                                                Switch(
+                                                    checked = vpnModeTunnelGames,
+                                                    onCheckedChange = { checked ->
+                                                        scope.launch {
+                                                            settingsManager.setVpnModeTunnelGames(checked)
+                                                            if (vpnState == "CONNECTED") {
+                                                                startVpnService(context)
+                                                            }
+                                                        }
+                                                    }
                                                 )
                                             }
                                         }
