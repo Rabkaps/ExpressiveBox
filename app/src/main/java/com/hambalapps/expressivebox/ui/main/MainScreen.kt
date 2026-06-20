@@ -238,7 +238,7 @@ fun MainScreen(
 
     // Observe VPN state and logs
     val vpnState by VpnServiceWrapper.vpnState.collectAsStateWithLifecycle()
-    var appVersion by remember { mutableStateOf("v1.5.1") }
+    var appVersion by remember { mutableStateOf("v1.6.0") }
     LaunchedEffect(Unit) {
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             try {
@@ -248,7 +248,7 @@ fun MainScreen(
                     @Suppress("DEPRECATION")
                     context.packageManager.getPackageInfo(context.packageName, 0)
                 }
-                val version = "v${pInfo.versionName ?: "1.5.1"}"
+                val version = "v${pInfo.versionName ?: "1.6.0"}"
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                     appVersion = version
                 }
