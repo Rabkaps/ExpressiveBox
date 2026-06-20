@@ -204,17 +204,17 @@ object ConfigInjector {
 
         android.util.Log.i("ExpressiveBox", "Direct DNS set to: $directDnsAddr (from system DNS: $systemDnsList)")
 
-        val directServer = createDnsServer("dns-direct", directDnsAddr, null)
+        val directServer = createDnsServer("dns-direct", directDnsAddr, "direct")
         servers.put(directServer)
 
         // 3. Clean Bootstrap DNS Server for resolving proxy/DNS hostnames reliably (without carrier hijacking)
         val bootstrapDnsAddr = if (settings.bypassIran) "178.22.122.100" else "1.1.1.1"
-        val bootstrapServer = createDnsServer("dns-bootstrap", bootstrapDnsAddr, null)
+        val bootstrapServer = createDnsServer("dns-bootstrap", bootstrapDnsAddr, "direct")
         servers.put(bootstrapServer)
 
         if (settings.vpnMode == "gaming" && !settings.vpnModeTunnelGames) {
-            val radarServer = createDnsServer("dns-radar", "10.202.10.10", null)
-            val shecanServer = createDnsServer("dns-shecan", "185.51.200.2", null)
+            val radarServer = createDnsServer("dns-radar", "10.202.10.10", "direct")
+            val shecanServer = createDnsServer("dns-shecan", "185.51.200.2", "direct")
             servers.put(radarServer)
             servers.put(shecanServer)
         }
@@ -454,6 +454,15 @@ object ConfigInjector {
                 put("outbound", if (settings.vpnModeTunnelGames) "proxy" else "direct")
             }
             newRules.put(gameRouteRule)
+
+            if (!settings.vpnModeTunnelGames) {
+                // In Direct Mode (not tunneling games), route all UDP traffic directly to bypass the proxy and lower ping
+                val udpDirectRule = JSONObject().apply {
+                    put("network", "udp")
+                    put("outbound", "direct")
+                }
+                newRules.put(udpDirectRule)
+            }
         } else if (settings.vpnMode == "ai_bypass" && settings.warpPrivateKey.isNotEmpty()) {
             val aiRouteRule = JSONObject().apply {
                 put("domain", JSONArray(aiBypassDomains))

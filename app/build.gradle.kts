@@ -15,8 +15,8 @@ android {
         applicationId = "com.hambalapps.expressivebox"
         minSdk = 24
         targetSdk = 36
-        versionCode = 165
-        versionName = "1.6.5"
+        versionCode = 166
+        versionName = "1.6.6"
     }
 
     splits {
