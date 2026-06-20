@@ -32,7 +32,8 @@ object ConfigInjector {
         "activision.com", "callofduty.com", "epicgames.com", "ea.com", "origin.com",
         "supercell.com", "clashofclans.com", "steampowered.com", "steamcommunity.com",
         "fortnite.com", "sony.com", "playstation.com", "playstation.net", "xbox.com", "xboxlive.com",
-        "garena.com", "roblox.com", "blizzard.com", "battle.net", "ubisoft.com", "apexlegends.com"
+        "garena.com", "roblox.com", "blizzard.com", "battle.net", "ubisoft.com", "apexlegends.com",
+        "levelinfinite.com", "steamstatic.com", "moonton.com", "mobilelegends.com"
     )
 
     private val aiBypassDomains = listOf(
@@ -115,7 +116,7 @@ object ConfigInjector {
             put("type", "tun")
             put("tag", "tun-in")
             put("interface_name", "tun0")
-            put("stack", settings.run { if (tunStack.isEmpty()) "mixed" else tunStack })
+            put("stack", if (settings.vpnMode == "gaming") "system" else (settings.run { if (tunStack.isEmpty()) "mixed" else tunStack }))
             put("mtu", if (settings.vpnMode == "gaming") 1350 else 1400)
             put("auto_route", true)
             put("strict_route", true)
@@ -203,7 +204,6 @@ object ConfigInjector {
 
         // 1. Secure DNS Server (routes via the proxy)
         val secureServer = createDnsServer("dns-secure", settings.secureDns, "proxy")
-        servers.put(secureServer)
 
         // 2. Local Bypass DNS Server for Iran domains (runs directly, detouring proxy)
         val systemDnsList = getSystemDnsServers(context)
@@ -220,18 +220,23 @@ object ConfigInjector {
         android.util.Log.i("ExpressiveBox", "Direct DNS set to: $directDnsAddr (from system DNS: $systemDnsList)")
 
         val directServer = createDnsServer("dns-direct", directDnsAddr, null)
-        servers.put(directServer)
 
         // 3. Clean Bootstrap DNS Server for resolving proxy/DNS hostnames reliably (without carrier hijacking)
         val bootstrapDnsAddr = if (settings.bypassIran) "178.22.122.100" else "1.1.1.1"
         val bootstrapServer = createDnsServer("dns-bootstrap", bootstrapDnsAddr, null)
-        servers.put(bootstrapServer)
 
         if (settings.vpnMode == "gaming" && !settings.vpnModeTunnelGames) {
-            val radarServer = createDnsServer("dns-radar", "https://10.202.10.10/dns-query", null)
-            val shecanServer = createDnsServer("dns-shecan", "https://185.51.200.2/dns-query", null)
+            val radarServer = createDnsServer("dns-radar", "10.202.10.10", null)
+            val shecanServer = createDnsServer("dns-shecan", "185.51.200.2", null)
             servers.put(radarServer)
             servers.put(shecanServer)
+            servers.put(secureServer)
+            servers.put(directServer)
+            servers.put(bootstrapServer)
+        } else {
+            servers.put(secureServer)
+            servers.put(directServer)
+            servers.put(bootstrapServer)
         }
 
         dns.put("servers", servers)
