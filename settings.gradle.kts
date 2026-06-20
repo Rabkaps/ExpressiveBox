@@ -31,3 +31,4 @@ plugins {
 
 rootProject.name = "ExpressiveBox"
 include(":app")
+include(":desktop")

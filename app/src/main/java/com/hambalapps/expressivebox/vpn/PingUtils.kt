@@ -1,9 +1,12 @@
 package com.hambalapps.expressivebox.vpn
 
+import android.util.Base64
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 import java.net.InetSocketAddress
 import java.net.Socket
+import java.nio.charset.StandardCharsets
 
 suspend fun measurePingDelay(host: String, port: Int): Int = withContext(Dispatchers.IO) {
     val startTime = System.currentTimeMillis()
@@ -17,14 +20,54 @@ suspend fun measurePingDelay(host: String, port: Int): Int = withContext(Dispatc
     }
 }
 
+fun tryBase64Decode(str: String): String? {
+    val flags = listOf(
+        Base64.DEFAULT,
+        Base64.URL_SAFE,
+        Base64.NO_PADDING,
+        Base64.NO_WRAP,
+        Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP
+    )
+    for (flag in flags) {
+        try {
+            val decoded = Base64.decode(str, flag)
+            val decodedStr = String(decoded, StandardCharsets.UTF_8).trim()
+            if (decodedStr.isNotEmpty()) {
+                return decodedStr
+            }
+        } catch (e: Exception) {
+            // continue
+        }
+    }
+    return null
+}
+
 fun getHostAndPortFromLink(link: String): Pair<String, Int>? {
     try {
         val trimmed = link.trim()
         val rest = if (trimmed.contains("#")) trimmed.substring(0, trimmed.indexOf("#")) else trimmed
         val schemeIdx = rest.indexOf("://")
+        val scheme = if (schemeIdx >= 0) rest.substring(0, schemeIdx).lowercase() else ""
         val content = if (schemeIdx >= 0) rest.substring(schemeIdx + 3) else rest
         val queryIdx = content.indexOf("?")
         val mainPart = if (queryIdx >= 0) content.substring(0, queryIdx) else content
+
+        if (scheme == "vmess") {
+            val decoded = tryBase64Decode(mainPart)
+            if (decoded != null && decoded.startsWith("{")) {
+                val vmessJson = JSONObject(decoded)
+                val add = vmessJson.optString("add")
+                val portVal = vmessJson.opt("port")
+                val port = when (portVal) {
+                    is Number -> portVal.toInt()
+                    is String -> portVal.toIntOrNull() ?: 443
+                    else -> 443
+                }
+                if (add.isNotEmpty()) {
+                    return Pair(add, port)
+                }
+            }
+        }
         
         val serverPart = if (mainPart.contains("@")) mainPart.substring(mainPart.indexOf("@") + 1) else mainPart
         val colonIdx = serverPart.lastIndexOf(":")

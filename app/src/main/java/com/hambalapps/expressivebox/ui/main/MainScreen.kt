@@ -54,6 +54,7 @@ import com.hambalapps.expressivebox.data.deserializeSubscriptions
 import com.hambalapps.expressivebox.vpn.VpnServiceWrapper
 import com.hambalapps.expressivebox.vpn.measurePingDelay
 import com.hambalapps.expressivebox.vpn.getHostAndPortFromLink
+import com.hambalapps.expressivebox.vpn.tryBase64Decode
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.async
@@ -264,6 +265,9 @@ fun MainScreen(
                 1 -> type == "VLESS"
                 2 -> type == "TROJAN"
                 3 -> type == "SS" || type == "SHADOWSOCKS"
+                4 -> type == "VMESS"
+                5 -> type == "HYSTERIA" || type == "HYSTERIA2" || type == "HY2"
+                6 -> type == "TUIC"
                 else -> true
             }
             if (matchesTab) {
@@ -672,11 +676,19 @@ fun MainScreen(
                                     if (vpnState == "CONNECTED") {
                                         stopVpnService(context)
                                     } else {
-                                        val intent = VpnService.prepare(context)
-                                        if (intent != null) {
-                                            vpnPermissionLauncher.launch(intent)
+                                        if (activeProfile.trim().isEmpty()) {
+                                            android.widget.Toast.makeText(
+                                                context,
+                                                context.getString(R.string.notif_no_node),
+                                                android.widget.Toast.LENGTH_SHORT
+                                            ).show()
                                         } else {
-                                            startVpnService(context)
+                                            val intent = VpnService.prepare(context)
+                                            if (intent != null) {
+                                                vpnPermissionLauncher.launch(intent)
+                                            } else {
+                                                startVpnService(context)
+                                            }
                                         }
                                     }
                                 }
@@ -1480,7 +1492,7 @@ fun MainScreen(
                                             },
                                             divider = {}
                                         ) {
-                                            listOf(stringResource(R.string.tab_all), "VLESS", "Trojan", "Shadowsocks").forEachIndexed { index, title ->
+                                            listOf(stringResource(R.string.tab_all), "VLESS", "Trojan", "Shadowsocks", "VMess", "Hysteria", "TUIC").forEachIndexed { index, title ->
                                                 Tab(
                                                     selected = selectedTab == index,
                                                     onClick = { selectedTab = index },
@@ -1525,12 +1537,18 @@ fun MainScreen(
                                                     val tagContainerColor = when (type) {
                                                         "VLESS" -> MaterialTheme.colorScheme.primaryContainer
                                                         "TROJAN" -> MaterialTheme.colorScheme.secondaryContainer
-                                                        else -> MaterialTheme.colorScheme.tertiaryContainer
+                                                        "VMESS" -> MaterialTheme.colorScheme.tertiaryContainer
+                                                        "HYSTERIA", "HYSTERIA2", "HY2" -> MaterialTheme.colorScheme.errorContainer
+                                                        "TUIC" -> MaterialTheme.colorScheme.primaryContainer
+                                                        else -> MaterialTheme.colorScheme.surfaceVariant
                                                     }
                                                     val tagTextColor = when (type) {
                                                         "VLESS" -> MaterialTheme.colorScheme.onPrimaryContainer
                                                         "TROJAN" -> MaterialTheme.colorScheme.onSecondaryContainer
-                                                        else -> MaterialTheme.colorScheme.onTertiaryContainer
+                                                        "VMESS" -> MaterialTheme.colorScheme.onTertiaryContainer
+                                                        "HYSTERIA", "HYSTERIA2", "HY2" -> MaterialTheme.colorScheme.onErrorContainer
+                                                        "TUIC" -> MaterialTheme.colorScheme.onPrimaryContainer
+                                                        else -> MaterialTheme.colorScheme.onSurfaceVariant
                                                     }
                                                     
                                                     Row(
@@ -2245,7 +2263,11 @@ fun MainScreen(
             !trimmed.startsWith("trojan://") &&
             !trimmed.startsWith("ss://") &&
             !trimmed.startsWith("socks5://") &&
-            !trimmed.startsWith("socks://")
+            !trimmed.startsWith("socks://") &&
+            !trimmed.startsWith("vmess://") &&
+            !trimmed.startsWith("hysteria2://") &&
+            !trimmed.startsWith("hy2://") &&
+            !trimmed.startsWith("tuic://")
         }
 
         AlertDialog(
@@ -2291,7 +2313,7 @@ fun MainScreen(
                             .fillMaxWidth()
                             .height(160.dp),
                         shape = ExpressiveButtonShape,
-                        placeholder = { Text("vless://... or trojan://... or { ... }") },
+                        placeholder = { Text("vless://... or vmess://... or hysteria2://... or tuic://...") },
                         enabled = !isImportFetching
                     )
                     if (isImportingSubscription) {
@@ -2746,7 +2768,7 @@ fun MainScreen(
                                 .fillMaxWidth()
                                 .height(160.dp),
                             shape = ExpressiveButtonShape,
-                            placeholder = { Text("vless://... or trojan://... or { ... }") }
+                            placeholder = { Text("vless://... or vmess://... or hysteria2://... or tuic://...") }
                         )
                     }
                 }
@@ -3022,7 +3044,7 @@ fun MainScreen(
                     },
                     divider = {}
                 ) {
-                    listOf(stringResource(R.string.tab_all), "VLESS", "Trojan", "Shadowsocks").forEachIndexed { index, title ->
+                    listOf(stringResource(R.string.tab_all), "VLESS", "Trojan", "Shadowsocks", "VMess", "Hysteria", "TUIC").forEachIndexed { index, title ->
                         Tab(
                             selected = selectedTab == index,
                             onClick = { selectedTab = index },
@@ -3069,12 +3091,18 @@ fun MainScreen(
                             val tagContainerColor = when (type) {
                                 "VLESS" -> MaterialTheme.colorScheme.primaryContainer
                                 "TROJAN" -> MaterialTheme.colorScheme.secondaryContainer
-                                else -> MaterialTheme.colorScheme.tertiaryContainer
+                                "VMESS" -> MaterialTheme.colorScheme.tertiaryContainer
+                                "HYSTERIA", "HYSTERIA2", "HY2" -> MaterialTheme.colorScheme.errorContainer
+                                "TUIC" -> MaterialTheme.colorScheme.primaryContainer
+                                else -> MaterialTheme.colorScheme.surfaceVariant
                             }
                             val tagTextColor = when (type) {
                                 "VLESS" -> MaterialTheme.colorScheme.onPrimaryContainer
                                 "TROJAN" -> MaterialTheme.colorScheme.onSecondaryContainer
-                                else -> MaterialTheme.colorScheme.onTertiaryContainer
+                                "VMESS" -> MaterialTheme.colorScheme.onTertiaryContainer
+                                "HYSTERIA", "HYSTERIA2", "HY2" -> MaterialTheme.colorScheme.onErrorContainer
+                                "TUIC" -> MaterialTheme.colorScheme.onPrimaryContainer
+                                else -> MaterialTheme.colorScheme.onSurfaceVariant
                             }
 
                             Row(
@@ -3726,29 +3754,54 @@ private suspend fun fetchSubscription(urlStr: String): List<String> = kotlinx.co
         
         decodedText.lines()
             .map { it.trim() }
-            .filter { it.startsWith("vless://") || it.startsWith("trojan://") || it.startsWith("ss://") }
+            .filter {
+                it.startsWith("vless://") || it.startsWith("trojan://") || it.startsWith("ss://") ||
+                it.startsWith("vmess://") || it.startsWith("hysteria2://") || it.startsWith("hy2://") ||
+                it.startsWith("tuic://")
+            }
     } else {
         throw java.io.IOException("HTTP error ${connection.responseCode}")
     }
 }
 
 private fun getProxyName(link: String, context: Context): String {
-    val hashIdx = link.indexOf("#")
-    return if (hashIdx >= 0) {
-        try {
-            java.net.URLDecoder.decode(link.substring(hashIdx + 1), "UTF-8")
+    val trimmed = link.trim()
+    val hashIdx = trimmed.indexOf("#")
+    if (hashIdx >= 0) {
+        return try {
+            java.net.URLDecoder.decode(trimmed.substring(hashIdx + 1), "UTF-8")
         } catch (e: Exception) {
-            link.substring(hashIdx + 1)
+            trimmed.substring(hashIdx + 1)
         }
-    } else {
+    }
+    
+    if (trimmed.startsWith("vmess://")) {
         try {
-            val rest = link.substringAfter("://")
-            val host = rest.substringAfter("@").substringBefore(":")
-            val scheme = link.substringBefore("://").uppercase()
-            "$scheme ($host)"
-        } catch (e: Exception) {
-            context.getString(R.string.notif_unnamed)
+            val mainPart = trimmed.substring(8)
+            val decoded = tryBase64Decode(mainPart)
+            if (decoded != null && decoded.startsWith("{")) {
+                val json = org.json.JSONObject(decoded)
+                val ps = json.optString("ps")
+                if (ps.isNotEmpty()) {
+                    return ps
+                }
+            }
+        } catch (e: Exception) {}
+    }
+
+    return try {
+        val schemeIdx = trimmed.indexOf("://")
+        val scheme = if (schemeIdx >= 0) trimmed.substring(0, schemeIdx).uppercase() else "VPN"
+        val rest = if (schemeIdx >= 0) trimmed.substring(schemeIdx + 3) else trimmed
+        val host = if (rest.contains("@")) {
+            rest.substringAfter("@").substringBefore(":")
+        } else {
+            rest.substringBefore(":")
         }
+        val cleanHost = if (host.length > 20) host.take(20) + "..." else host
+        "$scheme ($cleanHost)"
+    } catch (e: Exception) {
+        context.getString(R.string.notif_unnamed)
     }
 }
 

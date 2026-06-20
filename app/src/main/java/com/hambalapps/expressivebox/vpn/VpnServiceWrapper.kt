@@ -151,22 +151,43 @@ class VpnServiceWrapper : VpnService(), PlatformInterface, CommandServerHandler 
     }
 
     private fun getProxyName(link: String): String {
-        val hashIdx = link.indexOf("#")
-        return if (hashIdx >= 0) {
-            try {
-                java.net.URLDecoder.decode(link.substring(hashIdx + 1), "UTF-8")
+        val trimmed = link.trim()
+        val hashIdx = trimmed.indexOf("#")
+        if (hashIdx >= 0) {
+            return try {
+                java.net.URLDecoder.decode(trimmed.substring(hashIdx + 1), "UTF-8")
             } catch (e: Exception) {
-                link.substring(hashIdx + 1)
+                trimmed.substring(hashIdx + 1)
             }
-        } else {
+        }
+        
+        if (trimmed.startsWith("vmess://")) {
             try {
-                val rest = link.substringAfter("://")
-                val host = rest.substringAfter("@").substringBefore(":")
-                val scheme = link.substringBefore("://").uppercase()
-                "$scheme ($host)"
-            } catch (e: Exception) {
-                getString(R.string.notif_unnamed)
+                val mainPart = trimmed.substring(8)
+                val decoded = tryBase64Decode(mainPart)
+                if (decoded != null && decoded.startsWith("{")) {
+                    val json = org.json.JSONObject(decoded)
+                    val ps = json.optString("ps")
+                    if (ps.isNotEmpty()) {
+                        return ps
+                    }
+                }
+            } catch (e: Exception) {}
+        }
+
+        return try {
+            val schemeIdx = trimmed.indexOf("://")
+            val scheme = if (schemeIdx >= 0) trimmed.substring(0, schemeIdx).uppercase() else "VPN"
+            val rest = if (schemeIdx >= 0) trimmed.substring(schemeIdx + 3) else trimmed
+            val host = if (rest.contains("@")) {
+                rest.substringAfter("@").substringBefore(":")
+            } else {
+                rest.substringBefore(":")
             }
+            val cleanHost = if (host.length > 20) host.take(20) + "..." else host
+            "$scheme ($cleanHost)"
+        } catch (e: Exception) {
+            getString(R.string.notif_unnamed)
         }
     }
 
@@ -416,6 +437,20 @@ class VpnServiceWrapper : VpnService(), PlatformInterface, CommandServerHandler 
                     } else {
                         log("No servers available for Auto-Connect.")
                     }
+                }
+
+                if (rawProfile.trim().isEmpty()) {
+                    log("No profile selected. Aborting connection.")
+                    withContext(Dispatchers.Main) {
+                        android.widget.Toast.makeText(
+                            applicationContext,
+                            getString(R.string.notif_no_node),
+                            android.widget.Toast.LENGTH_LONG
+                        ).show()
+                    }
+                    _vpnState.value = "DISCONNECTED"
+                    stopSelf()
+                    return@launch
                 }
                 
                 // Read configurations from Preferences DataStore
