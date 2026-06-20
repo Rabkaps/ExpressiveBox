@@ -45,7 +45,7 @@ object ConfigInjector {
             sanitizePortFields(configJson)
 
             // 1. Inject or update inbounds (mixed local proxy at 127.0.0.1:2080)
-            injectMixedInbound(configJson)
+            injectMixedInbound(configJson, settings)
 
             // 2. Inject or update DNS (Split DNS rules)
             injectDns(configJson, settings)
@@ -66,7 +66,7 @@ object ConfigInjector {
         }
     }
 
-    private fun injectMixedInbound(config: JSONObject) {
+    private fun injectMixedInbound(config: JSONObject, settings: UserSettings) {
         val inbounds = config.optJSONArray("inbounds") ?: JSONArray().also { config.put("inbounds", it) }
         val newInbounds = JSONArray()
         
@@ -85,6 +85,25 @@ object ConfigInjector {
             put("listen_port", 2080)
         }
         newInbounds.put(mixedInbound)
+
+        if (settings.enableTun) {
+            val tunInbound = JSONObject().apply {
+                put("type", "tun")
+                put("tag", "tun-in")
+                put("interface_name", "sing-box-tun")
+                put("address", JSONArray(listOf("172.19.0.1/30", "fdfe:dcba:9876::1/126")))
+                put("auto_route", true)
+                put("strict_route", true)
+                put("stack", settings.tunStack.ifEmpty { "mixed" })
+                put("platform", JSONObject().apply {
+                    put("http_proxy", JSONObject().apply {
+                        put("enabled", false)
+                    })
+                })
+            }
+            newInbounds.put(tunInbound)
+        }
+
         config.put("inbounds", newInbounds)
     }
 

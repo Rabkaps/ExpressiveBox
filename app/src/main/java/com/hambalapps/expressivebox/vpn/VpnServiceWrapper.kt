@@ -440,6 +440,10 @@ class VpnServiceWrapper : VpnService(), PlatformInterface, CommandServerHandler 
                 val fragmentIntervalVal = settingsManager.fragmentInterval.first()
                 val enableMuxVal = settingsManager.enableMux.first()
                 val bypassLanVal = settingsManager.bypassLan.first()
+                val vpnModeVal = settingsManager.vpnMode.first()
+                val warpPrivateKeyVal = settingsManager.warpPrivateKey.first()
+                val warpPublicKeyVal = settingsManager.warpPublicKey.first()
+                val warpIpAddressVal = settingsManager.warpIpAddress.first()
                 splitTunnelingEnabledVal = settingsManager.splitTunnelingEnabled.first()
                 splitTunnelingModeVal = settingsManager.splitTunnelingMode.first()
                 splitTunnelingAppsVal = settingsManager.splitTunnelingApps.first()
@@ -452,7 +456,11 @@ class VpnServiceWrapper : VpnService(), PlatformInterface, CommandServerHandler 
                     fragmentLength = fragmentLengthVal,
                     fragmentInterval = fragmentIntervalVal,
                     enableMux = enableMuxVal,
-                    bypassLan = bypassLanVal
+                    bypassLan = bypassLanVal,
+                    vpnMode = vpnModeVal,
+                    warpPrivateKey = warpPrivateKeyVal,
+                    warpPublicKey = warpPublicKeyVal,
+                    warpIpAddress = warpIpAddressVal
                 )
 
                 // Inject our custom bypass-Iran rules, split DNS, and advanced parameters

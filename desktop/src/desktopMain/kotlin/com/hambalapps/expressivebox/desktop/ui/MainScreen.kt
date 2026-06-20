@@ -1,3 +1,8 @@
+@file:OptIn(
+    androidx.compose.material3.ExperimentalMaterial3Api::class,
+    androidx.compose.foundation.layout.ExperimentalLayoutApi::class
+)
+
 package com.hambalapps.expressivebox.desktop.ui
 
 import androidx.compose.animation.*
@@ -178,7 +183,6 @@ data class ServerItem(
     val type: String
 )
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun MainScreen() {
     val scope = rememberCoroutineScope()
@@ -960,14 +964,39 @@ fun AddConfigScreen(settings: UserSettings, settingsManager: SettingsManager) {
                                     scope.launch(Dispatchers.IO) {
                                         try {
                                             val url = URL(subUrlInput)
-                                            val conn = url.openConnection()
-                                            conn.connectTimeout = 6000
-                                            conn.readTimeout = 6000
+                                            val conn = url.openConnection() as java.net.HttpURLConnection
+                                            conn.connectTimeout = 15000
+                                            conn.readTimeout = 15000
+                                            conn.requestMethod = "GET"
+                                            conn.setRequestProperty("User-Agent", "sing-box/1.9.0")
+                                            conn.connect()
+                                            
+                                            if (conn.responseCode != 200) {
+                                                throw java.io.IOException("HTTP error ${conn.responseCode}")
+                                            }
+                                            
                                             val text = conn.inputStream.bufferedReader().use { it.readText() }
                                             
-                                            // Handle base64 decryption
-                                            val decoded = tryBase64Decode(text) ?: text
-                                            val servers = decoded.lines().map { it.trim() }.filter { it.isNotEmpty() }
+                                            // Handle base64 decryption (standard & URL-safe variants)
+                                            val decodedText = try {
+                                                val trimmed = text.trim().replace("\r", "").replace("\n", "").replace(" ", "")
+                                                val decodedBytes = try {
+                                                    java.util.Base64.getDecoder().decode(trimmed)
+                                                } catch (e: Exception) {
+                                                    java.util.Base64.getUrlDecoder().decode(trimmed)
+                                                }
+                                                String(decodedBytes, java.nio.charset.StandardCharsets.UTF_8)
+                                            } catch (e: Exception) {
+                                                tryBase64Decode(text) ?: text
+                                            }
+                                            
+                                            val servers = decodedText.lines()
+                                                .map { it.trim() }
+                                                .filter {
+                                                    it.startsWith("vless://") || it.startsWith("trojan://") || it.startsWith("ss://") ||
+                                                    it.startsWith("vmess://") || it.startsWith("hysteria2://") || it.startsWith("hy2://") ||
+                                                    it.startsWith("tuic://")
+                                                }
                                             
                                             if (servers.isNotEmpty()) {
                                                 withContext(Dispatchers.Main) {
@@ -1314,6 +1343,47 @@ fun SettingsScreen(settings: UserSettings, settingsManager: SettingsManager) {
                     )
                 }
                 Switch(checked = settings.bypassLan, onCheckedChange = { settingsManager.setBypassLan(it) })
+            }
+        }
+
+        // TUN Mode Card
+        Card(
+            shape = ExpressiveCardShape,
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 16.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = if (isFarsi) "حالت تون (TUN Mode - نیازمند ادمین)" else "Virtual TUN Interface (Requires Admin)",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = if (isFarsi) "کل ترافیک سیستم را در سطح کارت شبکه هدایت می‌کند. نیاز به اجرای برنامه به صورت Run as Administrator دارد." else "Routes all system traffic at the network adapter level. Requires running ExpressiveBox as Administrator.",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(checked = settings.enableTun, onCheckedChange = { settingsManager.setEnableTun(it) })
+                }
+                if (settings.enableTun) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = if (isFarsi) "توجه: برای اجرای موفقیت‌آمیز حالت تون، باید wintun.dll را در پوشه برنامه قرار دهید." else "Note: Place wintun.dll in the application directory for the TUN driver to initialize successfully.",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
             }
         }
 

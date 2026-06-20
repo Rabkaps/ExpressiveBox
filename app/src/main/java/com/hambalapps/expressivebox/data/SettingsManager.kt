@@ -40,6 +40,10 @@ class SettingsManager(private val context: Context) {
         val LAST_SUBS_UPDATE_TIME = longPreferencesKey("last_subs_update_time")
         val AUTO_CONNECT_SUBS = stringSetPreferencesKey("auto_connect_subs")
         val SHOW_LOGS_TAB = booleanPreferencesKey("show_logs_tab")
+        val VPN_MODE = stringPreferencesKey("vpn_mode")
+        val WARP_PRIVATE_KEY = stringPreferencesKey("warp_private_key")
+        val WARP_PUBLIC_KEY = stringPreferencesKey("warp_public_key")
+        val WARP_IP_ADDRESS = stringPreferencesKey("warp_ip_address")
         
         private val defaultThemeKey = if (Config.IS_SPECIAL) "cherry_blossom" else "dynamic"
 
@@ -71,6 +75,10 @@ class SettingsManager(private val context: Context) {
             lastSubsUpdateTime = 0L,
             autoConnectSubs = emptySet(),
             showLogsTab = true,
+            vpnMode = "standard",
+            warpPrivateKey = "",
+            warpPublicKey = "",
+            warpIpAddress = "",
             deserializedSubscriptions = emptyList()
         )
     }
@@ -126,6 +134,10 @@ class SettingsManager(private val context: Context) {
             lastSubsUpdateTime = prefs[LAST_SUBS_UPDATE_TIME] ?: 0L,
             autoConnectSubs = prefs[AUTO_CONNECT_SUBS] ?: emptySet(),
             showLogsTab = prefs[SHOW_LOGS_TAB] ?: true,
+            vpnMode = prefs[VPN_MODE] ?: "standard",
+            warpPrivateKey = prefs[WARP_PRIVATE_KEY] ?: "",
+            warpPublicKey = prefs[WARP_PUBLIC_KEY] ?: "",
+            warpIpAddress = prefs[WARP_IP_ADDRESS] ?: "",
             deserializedSubscriptions = deserialized
         )
     }.distinctUntilChanged()
@@ -155,6 +167,10 @@ class SettingsManager(private val context: Context) {
     val autoUpdateSubs: Flow<Boolean> = context.dataStore.data.map { it[AUTO_UPDATE_SUBS] ?: true }.distinctUntilChanged()
     val autoUpdateInterval: Flow<String> = context.dataStore.data.map { it[AUTO_UPDATE_INTERVAL] ?: "daily" }.distinctUntilChanged()
     val lastSubsUpdateTime: Flow<Long> = context.dataStore.data.map { it[LAST_SUBS_UPDATE_TIME] ?: 0L }.distinctUntilChanged()
+    val vpnMode: Flow<String> = context.dataStore.data.map { it[VPN_MODE] ?: "standard" }.distinctUntilChanged()
+    val warpPrivateKey: Flow<String> = context.dataStore.data.map { it[WARP_PRIVATE_KEY] ?: "" }.distinctUntilChanged()
+    val warpPublicKey: Flow<String> = context.dataStore.data.map { it[WARP_PUBLIC_KEY] ?: "" }.distinctUntilChanged()
+    val warpIpAddress: Flow<String> = context.dataStore.data.map { it[WARP_IP_ADDRESS] ?: "" }.distinctUntilChanged()
 
     suspend fun setAdvancedMode(value: Boolean) { context.dataStore.edit { it[IS_ADVANCED_MODE] = value } }
     suspend fun setBypassIran(value: Boolean) { context.dataStore.edit { it[BYPASS_IRAN] = value } }
@@ -182,6 +198,14 @@ class SettingsManager(private val context: Context) {
     suspend fun setAutoUpdateInterval(value: String) { context.dataStore.edit { it[AUTO_UPDATE_INTERVAL] = value } }
     suspend fun setLastSubsUpdateTime(value: Long) { context.dataStore.edit { it[LAST_SUBS_UPDATE_TIME] = value } }
     suspend fun setShowLogsTab(value: Boolean) { context.dataStore.edit { it[SHOW_LOGS_TAB] = value } }
+    suspend fun setVpnMode(value: String) { context.dataStore.edit { it[VPN_MODE] = value } }
+    suspend fun setWarpCredentials(privateKey: String, publicKey: String, ipAddress: String) {
+        context.dataStore.edit { prefs ->
+            prefs[WARP_PRIVATE_KEY] = privateKey
+            prefs[WARP_PUBLIC_KEY] = publicKey
+            prefs[WARP_IP_ADDRESS] = ipAddress
+        }
+    }
 
     val autoConnectSubs: Flow<Set<String>> = context.dataStore.data.map { it[AUTO_CONNECT_SUBS] ?: emptySet() }.distinctUntilChanged()
 
@@ -225,6 +249,10 @@ data class UserSettings(
     val lastSubsUpdateTime: Long,
     val autoConnectSubs: Set<String>,
     val showLogsTab: Boolean,
+    val vpnMode: String,
+    val warpPrivateKey: String,
+    val warpPublicKey: String,
+    val warpIpAddress: String,
     val deserializedSubscriptions: List<Subscription>
 )
 

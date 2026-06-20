@@ -100,8 +100,12 @@ object SingboxManager {
 
             // 4. Configure Windows System Proxy (Standard user mode)
             // Port 2080 is the default inbound port in our generated config
-            val proxyPort = 2080
-            SystemProxy.enable("127.0.0.1", proxyPort)
+            if (!settingsManager.currentSettings.enableTun) {
+                val proxyPort = 2080
+                SystemProxy.enable("127.0.0.1", proxyPort)
+            } else {
+                SystemProxy.disable()
+            }
 
             _vpnState.value = "CONNECTED"
             log("VPN Connected successfully.")

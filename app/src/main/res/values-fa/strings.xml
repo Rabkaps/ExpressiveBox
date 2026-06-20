@@ -173,5 +173,11 @@
     <string name="style_solid">پررنگ و تخت</string>
     <string name="show_logs_tab">نمایش تب لاگ‌ها</string>
     <string name="show_logs_tab_desc">نمایش یا پنهان کردن تب لاگ‌های سیستم در منوی پایین</string>
+    <string name="vpn_mode_title">حالت اتصال VPN</string>
+    <string name="mode_standard">معمولی (وب‌گردی)</string>
+    <string name="mode_gaming">حالت بازی (کاهش پینگ)</string>
+    <string name="mode_ai_bypass">دور زدن تحریم AI (کلودفلر Warp)</string>
+    <string name="registering_warp">در حال ثبت اکانت Cloudflare WARP...</string>
+    <string name="warp_failed">ثبت اکانت WARP ناموفق بود. اتصال را بررسی کنید.</string>
 </resources>
 

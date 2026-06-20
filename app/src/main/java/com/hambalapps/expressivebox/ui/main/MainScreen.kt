@@ -129,6 +129,10 @@ fun MainScreen(
     val lastSubsUpdateTime = settings.lastSubsUpdateTime
     val autoConnectSubs = settings.autoConnectSubs
     val showLogsTab = settings.showLogsTab
+    val vpnMode = settings.vpnMode
+    val warpPrivateKey = settings.warpPrivateKey
+    val warpPublicKey = settings.warpPublicKey
+    val warpIpAddress = settings.warpIpAddress
 
     val subscriptions = settings.deserializedSubscriptions
     val activeSubscription = remember(subscriptions, activeSubId) {
@@ -267,7 +271,8 @@ fun MainScreen(
             if (showLogsTab) Triple(2, context.getString(R.string.tab_logs), Icons.Default.Terminal) else null
         )
     }
-    val pagerState = rememberPagerState(pageCount = { tabs.size })
+    val pagerState = rememberPagerState(initialPage = 1, pageCount = { tabs.size })
+    var isRegisteringWarp by remember { mutableStateOf(false) }
     var isFetching by remember { mutableStateOf(false) }
     var fetchError by remember { mutableStateOf<String?>(null) }
     var subUrlInput by remember { mutableStateOf("") }
@@ -722,6 +727,133 @@ fun MainScreen(
                                     }
                                 }
                             )
+
+                            Spacer(modifier = Modifier.height(20.dp))
+
+                            // VPN Mode Selector Card
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(brush = secondaryCardBrush, shape = ExpressiveCardShape)
+                                    .border(
+                                        width = 1.dp,
+                                        brush = cardBorderBrush,
+                                        shape = ExpressiveCardShape
+                                    ),
+                                shape = ExpressiveCardShape,
+                                colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+                            ) {
+                                Column(modifier = Modifier.padding(20.dp)) {
+                                    Text(
+                                        text = stringResource(R.string.vpn_mode_title),
+                                        fontWeight = FontWeight.Bold,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        val modes = listOf(
+                                            "standard" to stringResource(R.string.mode_standard),
+                                            "gaming" to stringResource(R.string.mode_gaming),
+                                            "ai_bypass" to stringResource(R.string.mode_ai_bypass)
+                                        )
+                                        modes.forEach { (modeKey, modeName) ->
+                                            val isSelected = vpnMode == modeKey
+                                            Box(
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .clip(ExpressiveChipShape)
+                                                    .background(
+                                                        if (isSelected) MaterialTheme.colorScheme.primary
+                                                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                                    )
+                                                    .border(
+                                                        width = 1.dp,
+                                                        color = if (isSelected) MaterialTheme.colorScheme.primary
+                                                                else MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
+                                                        shape = ExpressiveChipShape
+                                                    )
+                                                    .clickable {
+                                                        if (modeKey == "ai_bypass") {
+                                                            if (warpPrivateKey.isEmpty()) {
+                                                                isRegisteringWarp = true
+                                                                scope.launch {
+                                                                    val creds = com.hambalapps.expressivebox.vpn.registerWarpAccount()
+                                                                    isRegisteringWarp = false
+                                                                    if (creds != null) {
+                                                                        settingsManager.setWarpCredentials(
+                                                                            creds.privateKey,
+                                                                            creds.publicKey,
+                                                                            creds.ipAddress
+                                                                        )
+                                                                        settingsManager.setVpnMode("ai_bypass")
+                                                                        if (vpnState == "CONNECTED") {
+                                                                            startVpnService(context)
+                                                                        }
+                                                                    } else {
+                                                                        android.widget.Toast.makeText(
+                                                                            context,
+                                                                            context.getString(R.string.warp_failed),
+                                                                            android.widget.Toast.LENGTH_LONG
+                                                                        ).show()
+                                                                    }
+                                                                }
+                                                            } else {
+                                                                scope.launch {
+                                                                    settingsManager.setVpnMode("ai_bypass")
+                                                                    if (vpnState == "CONNECTED") {
+                                                                        startVpnService(context)
+                                                                    }
+                                                                }
+                                                            }
+                                                        } else {
+                                                            scope.launch {
+                                                                settingsManager.setVpnMode(modeKey)
+                                                                if (vpnState == "CONNECTED") {
+                                                                    startVpnService(context)
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                    .pressScaleEffect()
+                                                    .padding(vertical = 10.dp, horizontal = 4.dp),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Text(
+                                                    text = modeName,
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimary
+                                                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (isRegisteringWarp) {
+                                AlertDialog(
+                                    onDismissRequest = {},
+                                    confirmButton = {},
+                                    title = { Text(stringResource(R.string.registering_warp)) },
+                                    text = {
+                                        Box(
+                                            modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            CircularProgressIndicator()
+                                        }
+                                    },
+                                    shape = ExpressiveCardShape,
+                                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                                )
+                            }
 
                             Spacer(modifier = Modifier.height(20.dp))
 

@@ -17,10 +17,29 @@ data class InjectorSettings(
     val fragmentLength: String,
     val fragmentInterval: String,
     val enableMux: Boolean,
-    val bypassLan: Boolean
+    val bypassLan: Boolean,
+    val vpnMode: String = "standard",
+    val warpPrivateKey: String = "",
+    val warpPublicKey: String = "",
+    val warpIpAddress: String = ""
 )
 
 object ConfigInjector {
+
+    private val gamingDomains = listOf(
+        "pubgmobile.com", "pubg.com", "riotgames.com", "playvalorant.com", "leagueoflegends.com",
+        "activision.com", "callofduty.com", "epicgames.com", "ea.com", "origin.com",
+        "supercell.com", "clashofclans.com", "steampowered.com", "steamcommunity.com",
+        "fortnite.com", "sony.com", "playstation.com", "playstation.net", "xbox.com", "xboxlive.com",
+        "garena.com", "roblox.com", "blizzard.com", "battle.net", "ubisoft.com", "apexlegends.com"
+    )
+
+    private val aiBypassDomains = listOf(
+        "gemini.google.com", "generativelanguage.googleapis.com", "ai.google.dev", "makersuite.google.com",
+        "openai.com", "chatgpt.com", "chat.openai.com", "oaistatic.com", "oaiusercontent.com",
+        "anthropic.com", "claude.ai",
+        "netflix.com", "netflix.net", "nflximg.net", "nflxvideo.net", "nflxso.net", "nflxext.com"
+    )
 
     fun injectConfig(context: Context, rawProfile: String, settings: InjectorSettings): String {
         try {
@@ -96,7 +115,7 @@ object ConfigInjector {
             put("tag", "tun-in")
             put("interface_name", "tun0")
             put("stack", settings.run { if (tunStack.isEmpty()) "mixed" else tunStack })
-            put("mtu", 9000)
+            put("mtu", if (settings.vpnMode == "gaming") 1350 else 9000)
             put("auto_route", true)
             put("strict_route", true)
             put("address", JSONArray(listOf("172.19.0.1/30")))
@@ -192,6 +211,13 @@ object ConfigInjector {
         val bootstrapServer = createDnsServer("dns-bootstrap", bootstrapDnsAddr, null)
         servers.put(bootstrapServer)
 
+        if (settings.vpnMode == "gaming") {
+            val radarServer = createDnsServer("dns-radar", "185.51.200.2", null)
+            val electroServer = createDnsServer("dns-electro", "78.157.42.100", null)
+            servers.put(radarServer)
+            servers.put(electroServer)
+        }
+
         dns.put("servers", servers)
 
         val rules = JSONArray()
@@ -235,6 +261,14 @@ object ConfigInjector {
                 put("server", "dns-direct")
             }
             rules.put(irSuffixRule)
+        }
+
+        if (settings.vpnMode == "gaming") {
+            val gameDnsRule = JSONObject().apply {
+                put("domain", JSONArray(gamingDomains))
+                put("server", "dns-radar")
+            }
+            rules.put(gameDnsRule)
         }
 
         dns.put("rules", rules)
@@ -405,6 +439,20 @@ object ConfigInjector {
             newRules.put(irSuffix)
         }
 
+        if (settings.vpnMode == "gaming") {
+            val gameRouteRule = JSONObject().apply {
+                put("domain", JSONArray(gamingDomains))
+                put("outbound", "direct")
+            }
+            newRules.put(gameRouteRule)
+        } else if (settings.vpnMode == "ai_bypass") {
+            val aiRouteRule = JSONObject().apply {
+                put("domain", JSONArray(aiBypassDomains))
+                put("outbound", "warp-out")
+            }
+            newRules.put(aiRouteRule)
+        }
+
         route.put("rules", newRules)
         route.put("auto_detect_interface", true)
         route.put("override_android_vpn", true)
@@ -431,8 +479,8 @@ object ConfigInjector {
             if (tag == "proxy" && settings.enableFragment) {
                 injectFragmentToOutbound(out, settings)
             }
-            // Inject multiplexing if enabled
-            if (tag == "proxy" && settings.enableMux) {
+            // Inject multiplexing if enabled (disabled in gaming mode for lower latencies)
+            if (tag == "proxy" && settings.enableMux && settings.vpnMode != "gaming") {
                 val mux = JSONObject().apply {
                     put("enabled", true)
                     put("protocol", "smux")
@@ -440,6 +488,8 @@ object ConfigInjector {
                     put("min_streams", 4)
                 }
                 out.put("multiplex", mux)
+            } else if (tag == "proxy" && settings.vpnMode == "gaming") {
+                out.remove("multiplex")
             }
             cleanOutbounds.put(out)
         }
@@ -456,6 +506,28 @@ object ConfigInjector {
                 put("tag", "block")
             })
         }
+
+        // Inject Cloudflare WARP WireGuard outbound for AI Bypass Mode
+        if (settings.vpnMode == "ai_bypass" && settings.warpPrivateKey.isNotEmpty()) {
+            val warpOutbound = JSONObject().apply {
+                put("type", "wireguard")
+                put("tag", "warp-out")
+                put("server", "engage.cloudflareclient.com")
+                put("server_port", 2408)
+                
+                val localAddresses = JSONArray().apply {
+                    put(settings.warpIpAddress.ifEmpty { "172.16.0.2/32" })
+                    put("fd00::5/128")
+                }
+                put("local_address", localAddresses)
+                put("private_key", settings.warpPrivateKey)
+                put("peer_public_key", "bmXOC+F1fxEMDXGggWMuGcIy77Dd1KAD4kURmMyd378=")
+                // Chain it over the active proxy outbound!
+                put("dialer", "proxy")
+            }
+            cleanOutbounds.put(warpOutbound)
+        }
+
         config.put("outbounds", cleanOutbounds)
     }
 

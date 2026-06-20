@@ -43,7 +43,8 @@ data class UserSettings(
     val autoUpdateInterval: String = "daily",
     val lastSubsUpdateTime: Long = 0L,
     val autoConnectSubs: Set<String> = emptySet(),
-    val isFarsi: Boolean = false
+    val isFarsi: Boolean = false,
+    val enableTun: Boolean = false
 ) {
     val deserializedSubscriptions: List<Subscription>
         get() {
@@ -145,6 +146,7 @@ class SettingsManager {
     fun setAutoUpdateInterval(value: String) { saveSettings(currentSettings.copy(autoUpdateInterval = value)) }
     fun setLastSubsUpdateTime(value: Long) { saveSettings(currentSettings.copy(lastSubsUpdateTime = value)) }
     fun setIsFarsi(value: Boolean) { saveSettings(currentSettings.copy(isFarsi = value)) }
+    fun setEnableTun(value: Boolean) { saveSettings(currentSettings.copy(enableTun = value)) }
 
     fun toggleAutoConnectSub(subId: String) {
         val current = currentSettings.autoConnectSubs
