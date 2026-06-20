@@ -175,8 +175,8 @@
     <string name="show_logs_tab_desc">Display engine logs tab in bottom navigation bar</string>
     <string name="vpn_mode_title">VPN Mode</string>
     <string name="mode_standard">Standard</string>
-    <string name="mode_gaming">Gaming Mode</string>
-    <string name="mode_ai_bypass">AI Bypass</string>
+    <string name="mode_gaming">Gaming Mode (Beta)</string>
+    <string name="mode_ai_bypass">AI Bypass (Beta)</string>
     <string name="registering_warp">Registering Cloudflare WARP...</string>
     <string name="warp_failed">WARP Registration failed. Check connection.</string>
     <string name="tunnel_games_title">Tunnel Games through VPN</string>
