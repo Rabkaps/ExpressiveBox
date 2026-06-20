@@ -116,7 +116,7 @@ object ConfigInjector {
             put("tag", "tun-in")
             put("interface_name", "tun0")
             put("stack", settings.run { if (tunStack.isEmpty()) "mixed" else tunStack })
-            put("mtu", if (settings.vpnMode == "gaming") 1350 else 9000)
+            put("mtu", if (settings.vpnMode == "gaming") 1350 else 1400)
             put("auto_route", true)
             put("strict_route", true)
             put("address", JSONArray(listOf("172.19.0.1/30")))
@@ -367,6 +367,14 @@ object ConfigInjector {
             directIps.add(bootstrapDnsAddr)
         }
 
+        if (settings.vpnMode == "gaming") {
+            listOf("10.202.10.10", "10.202.10.11", "185.51.200.2", "178.22.122.100").forEach { ip ->
+                if (!directIps.contains(ip)) {
+                    directIps.add(ip)
+                }
+            }
+        }
+
         for (host in proxyHosts) {
             if (host.isNotEmpty()) {
                 if (isIpAddress(host)) {
@@ -446,7 +454,7 @@ object ConfigInjector {
                 put("outbound", if (settings.vpnModeTunnelGames) "proxy" else "direct")
             }
             newRules.put(gameRouteRule)
-        } else if (settings.vpnMode == "ai_bypass") {
+        } else if (settings.vpnMode == "ai_bypass" && settings.warpPrivateKey.isNotEmpty()) {
             val aiRouteRule = JSONObject().apply {
                 put("domain", JSONArray(aiBypassDomains))
                 put("outbound", "warp-out")
