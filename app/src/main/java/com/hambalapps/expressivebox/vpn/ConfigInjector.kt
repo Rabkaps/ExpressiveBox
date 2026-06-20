@@ -204,17 +204,17 @@ object ConfigInjector {
 
         android.util.Log.i("ExpressiveBox", "Direct DNS set to: $directDnsAddr (from system DNS: $systemDnsList)")
 
-        val directServer = createDnsServer("dns-direct", directDnsAddr, "direct")
+        val directServer = createDnsServer("dns-direct", directDnsAddr, null)
         servers.put(directServer)
 
         // 3. Clean Bootstrap DNS Server for resolving proxy/DNS hostnames reliably (without carrier hijacking)
         val bootstrapDnsAddr = if (settings.bypassIran) "178.22.122.100" else "1.1.1.1"
-        val bootstrapServer = createDnsServer("dns-bootstrap", bootstrapDnsAddr, "direct")
+        val bootstrapServer = createDnsServer("dns-bootstrap", bootstrapDnsAddr, null)
         servers.put(bootstrapServer)
 
         if (settings.vpnMode == "gaming" && !settings.vpnModeTunnelGames) {
-            val radarServer = createDnsServer("dns-radar", "10.202.10.10", "direct")
-            val shecanServer = createDnsServer("dns-shecan", "185.51.200.2", "direct")
+            val radarServer = createDnsServer("dns-radar", "10.202.10.10", null)
+            val shecanServer = createDnsServer("dns-shecan", "185.51.200.2", null)
             servers.put(radarServer)
             servers.put(shecanServer)
         }
