@@ -112,6 +112,8 @@ class VpnServiceWrapper : VpnService(), PlatformInterface, CommandServerHandler 
     private var splitTunnelingEnabledVal = false
     private var splitTunnelingModeVal = "bypass"
     private var splitTunnelingAppsVal = emptySet<String>()
+    private var showLiveNotificationVal = false
+    private var activeProfileVal = ""
 
     override fun onCreate() {
         super.onCreate()
@@ -131,11 +133,30 @@ class VpnServiceWrapper : VpnService(), PlatformInterface, CommandServerHandler 
                 }
             }
         }
+
+        serviceScope.launch {
+            val settingsManager = SettingsManager(applicationContext)
+            settingsManager.settings.collect { settings ->
+                showLiveNotificationVal = settings.showLiveNotification
+                activeProfileVal = settings.activeProfile
+                if (isForeground) {
+                    updateNotification(_vpnState.value)
+                }
+            }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val action = intent?.action
         android.util.Log.i("ExpressiveBox", "VpnServiceWrapper onStartCommand called with action: $action")
+        if (intent != null) {
+            if (intent.hasExtra("active_profile")) {
+                activeProfileVal = intent.getStringExtra("active_profile") ?: ""
+            }
+            if (intent.hasExtra("show_live_notification")) {
+                showLiveNotificationVal = intent.getBooleanExtra("show_live_notification", false)
+            }
+        }
         if (action == ACTION_START) {
             if (_vpnState.value == "CONNECTED") {
                 reloadVpnEngine()
@@ -150,56 +171,14 @@ class VpnServiceWrapper : VpnService(), PlatformInterface, CommandServerHandler 
         return START_NOT_STICKY
     }
 
-    private fun getProxyName(link: String): String {
-        val trimmed = link.trim()
-        val hashIdx = trimmed.indexOf("#")
-        if (hashIdx >= 0) {
-            return try {
-                java.net.URLDecoder.decode(trimmed.substring(hashIdx + 1), "UTF-8")
-            } catch (e: Exception) {
-                trimmed.substring(hashIdx + 1)
-            }
-        }
-        
-        if (trimmed.startsWith("vmess://")) {
-            try {
-                val mainPart = trimmed.substring(8)
-                val decoded = tryBase64Decode(mainPart)
-                if (decoded != null && decoded.startsWith("{")) {
-                    val json = org.json.JSONObject(decoded)
-                    val ps = json.optString("ps")
-                    if (ps.isNotEmpty()) {
-                        return ps
-                    }
-                }
-            } catch (e: Exception) {}
-        }
-
-        return try {
-            val schemeIdx = trimmed.indexOf("://")
-            val scheme = if (schemeIdx >= 0) trimmed.substring(0, schemeIdx).uppercase() else "VPN"
-            val rest = if (schemeIdx >= 0) trimmed.substring(schemeIdx + 3) else trimmed
-            val host = if (rest.contains("@")) {
-                rest.substringAfter("@").substringBefore(":")
-            } else {
-                rest.substringBefore(":")
-            }
-            val cleanHost = if (host.length > 20) host.take(20) + "..." else host
-            "$scheme ($cleanHost)"
-        } catch (e: Exception) {
-            getString(R.string.notif_unnamed)
-        }
-    }
-
     private fun buildNotification(state: String): android.app.Notification {
         val settingsManager = SettingsManager(applicationContext)
-        val activeProfile = runBlocking { settingsManager.activeProfile.first() }
-        val nodeName = if (activeProfile.isEmpty()) {
+        val nodeName = if (activeProfileVal.isEmpty()) {
             getString(R.string.notif_no_node)
-        } else if (activeProfile.startsWith("{")) {
+        } else if (activeProfileVal.startsWith("{")) {
             getString(R.string.notif_custom)
         } else {
-            getProxyName(activeProfile)
+            ProxyNameResolver.getProxyName(activeProfileVal, applicationContext)
         }
         
         val contentText = when (state) {
@@ -285,7 +264,7 @@ class VpnServiceWrapper : VpnService(), PlatformInterface, CommandServerHandler 
             listPendingIntent
         ).build()
         
-        val showLiveNotif = runBlocking { settingsManager.showLiveNotification.first() }
+        val showLiveNotif = showLiveNotificationVal
         
         val channelToUse = if (showLiveNotif) "vpn_service_channel_live" else CHANNEL_ID
         val priority = NotificationCompat.PRIORITY_DEFAULT
@@ -335,8 +314,7 @@ class VpnServiceWrapper : VpnService(), PlatformInterface, CommandServerHandler 
 
     private fun startForegroundServiceNotification() {
         log("startForegroundServiceNotification called")
-        val settingsManager = SettingsManager(applicationContext)
-        val showLiveNotif = runBlocking { settingsManager.showLiveNotification.first() }
+        val showLiveNotif = showLiveNotificationVal
         log("showLiveNotification toggle: $showLiveNotif")
         if (showLiveNotif && Build.VERSION.SDK_INT >= 36) {
             val manager = getSystemService(NotificationManager::class.java)
@@ -428,7 +406,7 @@ class VpnServiceWrapper : VpnService(), PlatformInterface, CommandServerHandler 
                         val results = jobs.awaitAll()
                         val bestServer = results.filter { it.second >= 0 }.minByOrNull { it.second }
                         if (bestServer != null) {
-                            log("Selected best server: ${getProxyName(bestServer.first)} with delay ${bestServer.second} ms")
+                            log("Selected best server: ${ProxyNameResolver.getProxyName(bestServer.first, applicationContext)} with delay ${bestServer.second} ms")
                             settingsManager.setActiveProfile(bestServer.first)
                             rawProfile = bestServer.first
                         } else {

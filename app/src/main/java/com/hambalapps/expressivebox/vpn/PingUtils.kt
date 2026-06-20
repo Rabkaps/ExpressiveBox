@@ -7,6 +7,10 @@ import org.json.JSONObject
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.nio.charset.StandardCharsets
+import android.content.Context
+import java.net.URLDecoder
+import java.util.concurrent.ConcurrentHashMap
+
 
 suspend fun measurePingDelay(host: String, port: Int): Int = withContext(Dispatchers.IO) {
     val startTime = System.currentTimeMillis()
@@ -79,3 +83,57 @@ fun getHostAndPortFromLink(link: String): Pair<String, Int>? {
         return null
     }
 }
+
+object ProxyNameResolver {
+    private val nameCache = ConcurrentHashMap<String, String>()
+
+    fun getProxyName(link: String, context: Context): String {
+        val cached = nameCache[link]
+        if (cached != null) return cached
+
+        val trimmed = link.trim()
+        val hashIdx = trimmed.indexOf("#")
+        if (hashIdx >= 0) {
+            val name = try {
+                URLDecoder.decode(trimmed.substring(hashIdx + 1), "UTF-8")
+            } catch (e: Exception) {
+                trimmed.substring(hashIdx + 1)
+            }
+            nameCache[link] = name
+            return name
+        }
+
+        if (trimmed.startsWith("vmess://")) {
+            try {
+                val mainPart = trimmed.substring(8)
+                val decoded = tryBase64Decode(mainPart)
+                if (decoded != null && decoded.startsWith("{")) {
+                    val json = JSONObject(decoded)
+                    val ps = json.optString("ps")
+                    if (ps.isNotEmpty()) {
+                        nameCache[link] = ps
+                        return ps
+                    }
+                }
+            } catch (e: Exception) {}
+        }
+
+        val name = try {
+            val schemeIdx = trimmed.indexOf("://")
+            val scheme = if (schemeIdx >= 0) trimmed.substring(0, schemeIdx).uppercase() else "VPN"
+            val rest = if (schemeIdx >= 0) trimmed.substring(schemeIdx + 3) else trimmed
+            val host = if (rest.contains("@")) {
+                rest.substringAfter("@").substringBefore(":")
+            } else {
+                rest.substringBefore(":")
+            }
+            val cleanHost = if (host.length > 20) host.take(20) + "..." else host
+            "$scheme ($cleanHost)"
+        } catch (e: Exception) {
+            context.getString(com.hambalapps.expressivebox.R.string.notif_unnamed)
+        }
+        nameCache[link] = name
+        return name
+    }
+}
+

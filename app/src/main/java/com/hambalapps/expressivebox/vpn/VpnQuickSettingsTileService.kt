@@ -7,7 +7,11 @@ import android.service.quicksettings.TileService
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.collectLatest
 
+import com.hambalapps.expressivebox.data.SettingsManager
+import kotlinx.coroutines.flow.first
+
 class VpnQuickSettingsTileService : TileService() {
+
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var observeJob: Job? = null
 
@@ -77,13 +81,21 @@ class VpnQuickSettingsTileService : TileService() {
     }
 
     private fun startVpnService() {
-        val intent = Intent(this, VpnServiceWrapper::class.java).apply {
-            action = VpnServiceWrapper.ACTION_START
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(intent)
-        } else {
-            startService(intent)
+        val settingsManager = SettingsManager(applicationContext)
+        serviceScope.launch {
+            val currentSettings = withContext(Dispatchers.IO) {
+                settingsManager.settings.first()
+            }
+            val intent = Intent(this@VpnQuickSettingsTileService, VpnServiceWrapper::class.java).apply {
+                action = VpnServiceWrapper.ACTION_START
+                putExtra("active_profile", currentSettings.activeProfile)
+                putExtra("show_live_notification", currentSettings.showLiveNotification)
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(intent)
+            } else {
+                startService(intent)
+            }
         }
     }
 

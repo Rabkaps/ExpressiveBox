@@ -55,6 +55,7 @@ import com.hambalapps.expressivebox.vpn.VpnServiceWrapper
 import com.hambalapps.expressivebox.vpn.measurePingDelay
 import com.hambalapps.expressivebox.vpn.getHostAndPortFromLink
 import com.hambalapps.expressivebox.vpn.tryBase64Decode
+import com.hambalapps.expressivebox.vpn.ProxyNameResolver
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.async
@@ -127,6 +128,7 @@ fun MainScreen(
     val autoUpdateInterval = settings.autoUpdateInterval
     val lastSubsUpdateTime = settings.lastSubsUpdateTime
     val autoConnectSubs = settings.autoConnectSubs
+    val showLogsTab = settings.showLogsTab
 
     val subscriptions = settings.deserializedSubscriptions
     val activeSubscription = remember(subscriptions, activeSubId) {
@@ -142,10 +144,15 @@ fun MainScreen(
 
     // Check battery optimization exemption on launch
     LaunchedEffect(Unit) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
-            if (!powerManager.isIgnoringBatteryOptimizations(context.packageName)) {
-                showBatteryOptimizationDialog = true
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+                val isIgnoring = powerManager.isIgnoringBatteryOptimizations(context.packageName)
+                if (!isIgnoring) {
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        showBatteryOptimizationDialog = true
+                    }
+                }
             }
         }
     }
@@ -227,24 +234,40 @@ fun MainScreen(
 
     // Observe VPN state and logs
     val vpnState by VpnServiceWrapper.vpnState.collectAsStateWithLifecycle()
-    val appVersion = remember {
-        try {
-            val pInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                context.packageManager.getPackageInfo(context.packageName, android.content.pm.PackageManager.PackageInfoFlags.of(0))
-            } else {
-                @Suppress("DEPRECATION")
-                context.packageManager.getPackageInfo(context.packageName, 0)
+    var appVersion by remember { mutableStateOf("v1.5.1") }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                val pInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    context.packageManager.getPackageInfo(context.packageName, android.content.pm.PackageManager.PackageInfoFlags.of(0))
+                } else {
+                    @Suppress("DEPRECATION")
+                    context.packageManager.getPackageInfo(context.packageName, 0)
+                }
+                val version = "v${pInfo.versionName ?: "1.5.1"}"
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    appVersion = version
+                }
+            } catch (e: Exception) {
+                // Ignore
             }
-            "v${pInfo.versionName}"
-        } catch (e: Exception) {
-            "v1.0.68"
         }
     }
 
     var showImportDialog by remember { mutableStateOf(false) }
     var importText by remember { mutableStateOf("") }
     var showLogs by remember { mutableStateOf(false) }
-    val pagerState = rememberPagerState(pageCount = { 4 })
+    
+    // Tabs list ordered as: 1. Servers, 2. Home (Main), 3. Settings, 4. Logs (if enabled)
+    val tabs = remember(showLogsTab, context) {
+        listOfNotNull(
+            Triple(1, context.getString(R.string.tab_servers), Icons.Default.Dns),
+            Triple(0, context.getString(R.string.tab_home), Icons.Default.Home),
+            Triple(3, context.getString(R.string.tab_settings), Icons.Default.Settings),
+            if (showLogsTab) Triple(2, context.getString(R.string.tab_logs), Icons.Default.Terminal) else null
+        )
+    }
+    val pagerState = rememberPagerState(pageCount = { tabs.size })
     var isFetching by remember { mutableStateOf(false) }
     var fetchError by remember { mutableStateOf<String?>(null) }
     var subUrlInput by remember { mutableStateOf("") }
@@ -271,7 +294,7 @@ fun MainScreen(
                 else -> true
             }
             if (matchesTab) {
-                val name = getProxyName(serverLink, context)
+                val name = ProxyNameResolver.getProxyName(serverLink, context)
                 if (name.contains(searchQuery, ignoreCase = true)) {
                     ServerItem(link = serverLink, name = name, type = type)
                 } else null
@@ -592,12 +615,17 @@ fun MainScreen(
                             containerColor = Color.Transparent
                         ),
                         actions = {
-                            IconButton(onClick = { scope.launch { pagerState.animateScrollToPage(2) } }) {
-                                Icon(
-                                    imageVector = Icons.Default.Terminal,
-                                    contentDescription = stringResource(R.string.show_logs),
-                                    tint = if (pagerState.targetPage == 2) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                                )
+                            if (showLogsTab) {
+                                val targetLogPageIdx = remember(tabs) { tabs.indexOfFirst { it.first == 2 } }
+                                if (targetLogPageIdx >= 0) {
+                                    IconButton(onClick = { scope.launch { pagerState.animateScrollToPage(targetLogPageIdx) } }) {
+                                        Icon(
+                                            imageVector = Icons.Default.Terminal,
+                                            contentDescription = stringResource(R.string.show_logs),
+                                            tint = if (pagerState.targetPage == targetLogPageIdx) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                }
                             }
                         }
                     )
@@ -619,15 +647,15 @@ fun MainScreen(
                     containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.95f),
                     tonalElevation = 8.dp
                 ) {
-                    listOf(
-                        Triple(0, stringResource(R.string.tab_home), Icons.Default.Home),
-                        Triple(1, stringResource(R.string.tab_servers), Icons.Default.Dns),
-                        Triple(2, stringResource(R.string.tab_logs), Icons.Default.Terminal),
-                        Triple(3, stringResource(R.string.tab_settings), Icons.Default.Settings)
-                    ).forEach { (tabId, label, icon) ->
+                    tabs.forEach { (tabId, label, icon) ->
+                        val pageIdx = tabs.indexOfFirst { it.first == tabId }
                         NavigationBarItem(
-                            selected = pagerState.targetPage == tabId,
-                            onClick = { scope.launch { pagerState.animateScrollToPage(tabId) } },
+                            selected = if (pageIdx >= 0) pagerState.targetPage == pageIdx else false,
+                            onClick = { 
+                                if (pageIdx >= 0) {
+                                    scope.launch { pagerState.animateScrollToPage(pageIdx) }
+                                } 
+                            },
                             icon = { Icon(icon, contentDescription = label) },
                             label = { Text(label, style = MaterialTheme.typography.labelSmall) }
                         )
@@ -645,6 +673,7 @@ fun MainScreen(
                     state = pagerState,
                     modifier = Modifier.fillMaxSize()
                 ) { pageIndex ->
+                    val tabId = if (pageIndex < tabs.size) tabs[pageIndex].first else 0
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -657,7 +686,7 @@ fun MainScreen(
                                 this.alpha = alpha
                             }
                     ) {
-                        when (pageIndex) {
+                        when (tabId) {
                     0 -> { // Home Tab
                         Column(
                             modifier = Modifier
@@ -762,7 +791,7 @@ fun MainScreen(
                                                 Spacer(modifier = Modifier.width(12.dp))
                                                 Column(modifier = Modifier.weight(1f)) {
                                                     Text(
-                                                        text = if (activeProfile.startsWith("{")) stringResource(R.string.custom_json) else getProxyName(activeProfile, context),
+                                                        text = if (activeProfile.startsWith("{")) stringResource(R.string.custom_json) else ProxyNameResolver.getProxyName(activeProfile, context),
                                                         style = MaterialTheme.typography.bodyMedium,
                                                         fontWeight = FontWeight.Bold,
                                                         color = MaterialTheme.colorScheme.onSurface,
@@ -1749,7 +1778,9 @@ fun MainScreen(
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Spacer(modifier = Modifier.height(16.dp))
+                            val isLogsTabActive = tabs[pagerState.currentPage].first == 2
                             LogsConsole(
+                                isActive = isLogsTabActive,
                                 context = context,
                                 cardStyle = cardStyle,
                                 isDark = isDark,
@@ -1841,6 +1872,26 @@ fun MainScreen(
                                             }
                                         }
                                         Switch(checked = showLiveNotification, onCheckedChange = { scope.launch { settingsManager.setShowLiveNotification(it); if (vpnState == "CONNECTED") startVpnService(context) } })
+                                    }
+                                    
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                    Spacer(modifier = Modifier.height(16.dp))
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.Terminal, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                            Spacer(modifier = Modifier.width(12.dp))
+                                            Column {
+                                                Text(stringResource(R.string.show_logs_tab), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                                                Text(stringResource(R.string.show_logs_tab_desc), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            }
+                                        }
+                                        Switch(checked = showLogsTab, onCheckedChange = { scope.launch { settingsManager.setShowLogsTab(it) } })
                                     }
                                     if (showLiveNotification) {
                                         Spacer(modifier = Modifier.height(8.dp))
@@ -3360,7 +3411,6 @@ fun ConnectionDashboard(
         if (s == "CONNECTED") 1.05f else 1.0f
     }
 
-    // Speed details monitoring using Android TrafficStats
     var downloadSpeed by remember { mutableStateOf("0.0 KB/s") }
     var uploadSpeed by remember { mutableStateOf("0.0 KB/s") }
     var pingTime by remember { mutableStateOf("0 ms") }
@@ -3369,35 +3419,14 @@ fun ConnectionDashboard(
         if (state == "CONNECTED") {
             pingTime = "${(35..65).random()} ms"
             
-            // Helper functions to get current traffic stats
-            fun getRxBytes(): Long {
-                val myUid = context.applicationInfo.uid
-                val rx = android.net.TrafficStats.getUidRxBytes(myUid)
-                return if (rx != android.net.TrafficStats.UNSUPPORTED.toLong()) rx else android.net.TrafficStats.getTotalRxBytes()
-            }
-            fun getTxBytes(): Long {
-                val myUid = context.applicationInfo.uid
-                val tx = android.net.TrafficStats.getUidTxBytes(myUid)
-                return if (tx != android.net.TrafficStats.UNSUPPORTED.toLong()) tx else android.net.TrafficStats.getTotalTxBytes()
-            }
-            fun formatSpeed(bytesPerSec: Long): String {
-                val kb = bytesPerSec / 1024.0
-                val mb = kb / 1024.0
-                return when {
-                    mb >= 1.0 -> String.format(java.util.Locale.US, "%.1f MB/s", mb)
-                    kb >= 0.1 -> String.format(java.util.Locale.US, "%.1f KB/s", kb)
-                    else -> "0.0 KB/s"
-                }
-            }
-
-            var lastRx = getRxBytes()
-            var lastTx = getTxBytes()
+            var lastRx = android.net.TrafficStats.getTotalRxBytes()
+            var lastTx = android.net.TrafficStats.getTotalTxBytes()
             var lastTime = System.currentTimeMillis()
 
             while (true) {
                 kotlinx.coroutines.delay(1000)
-                val currentRx = getRxBytes()
-                val currentTx = getTxBytes()
+                val currentRx = android.net.TrafficStats.getTotalRxBytes()
+                val currentTx = android.net.TrafficStats.getTotalTxBytes()
                 val currentTime = System.currentTimeMillis()
                 
                 val dt = (currentTime - lastTime) / 1000.0
@@ -3405,20 +3434,21 @@ fun ConnectionDashboard(
                     val dlBytes = currentRx - lastRx
                     val ulBytes = currentTx - lastTx
                     
-                    val dlSpeed = if (dlBytes >= 0) (dlBytes / dt).toLong() else 0L
-                    val ulSpeed = if (ulBytes >= 0) (ulBytes / dt).toLong() else 0L
-                    
-                    downloadSpeed = formatSpeed(dlSpeed)
-                    uploadSpeed = formatSpeed(ulSpeed)
+                    val formatSpeed = { bytesPerSec: Long ->
+                        val kb = bytesPerSec / 1024.0
+                        val mb = kb / 1024.0
+                        when {
+                            mb >= 1.0 -> String.format(java.util.Locale.US, "%.1f MB/s", mb)
+                            kb >= 0.1 -> String.format(java.util.Locale.US, "%.1f KB/s", kb)
+                            else -> "0.0 KB/s"
+                        }
+                    }
+                    downloadSpeed = formatSpeed(if (dlBytes >= 0) (dlBytes / dt).toLong() else 0L)
+                    uploadSpeed = formatSpeed(if (ulBytes >= 0) (ulBytes / dt).toLong() else 0L)
                 }
-                
                 lastRx = currentRx
                 lastTx = currentTx
                 lastTime = currentTime
-                
-                if ((1..10).random() > 8) {
-                    pingTime = "${(35..75).random()} ms"
-                }
             }
         } else {
             downloadSpeed = "0.0 KB/s"
@@ -3466,7 +3496,6 @@ fun ConnectionDashboard(
         }
     }
 
-    // Active Card background animation (alive and pulsing flow)
     val infiniteTransition = rememberInfiniteTransition(label = "ActiveCardDashboardTransition")
     val flowOffset by infiniteTransition.animateFloat(
         initialValue = 0f,
@@ -3527,12 +3556,10 @@ fun ConnectionDashboard(
                 .fillMaxWidth()
                 .padding(vertical = 24.dp, horizontal = 16.dp)
         ) {
-            // Main Button Section
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier.size(180.dp)
             ) {
-                // Custom Canvas-based WaveVisualizer (animates smoothly when connected/connecting)
                 if (state == "CONNECTED" || state == "CONNECTING") {
                     WaveVisualizer(
                         state = state,
@@ -3542,7 +3569,6 @@ fun ConnectionDashboard(
                     )
                 }
 
-                // Main connect button
                 Box(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
@@ -3579,7 +3605,6 @@ fun ConnectionDashboard(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Connection State Pill
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(32.dp))
@@ -3619,7 +3644,6 @@ fun ConnectionDashboard(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // Live Network Stats Box
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -3629,7 +3653,6 @@ fun ConnectionDashboard(
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Ping metric
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
                         text = "PING",
@@ -3651,7 +3674,6 @@ fun ConnectionDashboard(
                         .background(MaterialTheme.colorScheme.outlineVariant)
                 )
 
-                // Download speed
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
@@ -3682,7 +3704,6 @@ fun ConnectionDashboard(
                         .background(MaterialTheme.colorScheme.outlineVariant)
                 )
 
-                // Upload speed
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
@@ -3710,15 +3731,22 @@ fun ConnectionDashboard(
     }
 }
 
-
 private fun startVpnService(context: Context) {
-    val intent = Intent(context, VpnServiceWrapper::class.java).apply {
-        action = VpnServiceWrapper.ACTION_START
-    }
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        context.startForegroundService(intent)
-    } else {
-        context.startService(intent)
+    val settingsManager = SettingsManager(context.applicationContext)
+    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+        val currentSettings = settingsManager.settings.first()
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+            val intent = Intent(context, VpnServiceWrapper::class.java).apply {
+                action = VpnServiceWrapper.ACTION_START
+                putExtra("active_profile", currentSettings.activeProfile)
+                putExtra("show_live_notification", currentSettings.showLiveNotification)
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
+        }
     }
 }
 
@@ -3737,71 +3765,13 @@ private suspend fun fetchSubscription(urlStr: String): List<String> = kotlinx.co
     connection.requestMethod = "GET"
     connection.setRequestProperty("User-Agent", "sing-box/1.9.0")
     connection.connect()
-    
-    if (connection.responseCode == 200) {
-        val text = connection.inputStream.bufferedReader().use { it.readText() }
-        val decodedText = try {
-            val trimmed = text.trim().replace("\r", "").replace("\n", "").replace(" ", "")
-            val decodedBytes = try {
-                android.util.Base64.decode(trimmed, android.util.Base64.DEFAULT)
-            } catch (e: java.lang.IllegalArgumentException) {
-                android.util.Base64.decode(trimmed, android.util.Base64.URL_SAFE or android.util.Base64.NO_PADDING)
-            }
-            String(decodedBytes, java.nio.charset.StandardCharsets.UTF_8)
-        } catch (e: Exception) {
-            text
-        }
-        
-        decodedText.lines()
-            .map { it.trim() }
-            .filter {
-                it.startsWith("vless://") || it.startsWith("trojan://") || it.startsWith("ss://") ||
-                it.startsWith("vmess://") || it.startsWith("hysteria2://") || it.startsWith("hy2://") ||
-                it.startsWith("tuic://")
-            }
+    val responseCode = connection.responseCode
+    if (responseCode == 200) {
+        val rawData = connection.inputStream.bufferedReader().use { it.readText() }
+        val decoded = tryBase64Decode(rawData) ?: rawData
+        decoded.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
     } else {
-        throw java.io.IOException("HTTP error ${connection.responseCode}")
-    }
-}
-
-private fun getProxyName(link: String, context: Context): String {
-    val trimmed = link.trim()
-    val hashIdx = trimmed.indexOf("#")
-    if (hashIdx >= 0) {
-        return try {
-            java.net.URLDecoder.decode(trimmed.substring(hashIdx + 1), "UTF-8")
-        } catch (e: Exception) {
-            trimmed.substring(hashIdx + 1)
-        }
-    }
-    
-    if (trimmed.startsWith("vmess://")) {
-        try {
-            val mainPart = trimmed.substring(8)
-            val decoded = tryBase64Decode(mainPart)
-            if (decoded != null && decoded.startsWith("{")) {
-                val json = org.json.JSONObject(decoded)
-                val ps = json.optString("ps")
-                if (ps.isNotEmpty()) {
-                    return ps
-                }
-            }
-        } catch (e: Exception) {}
-    }
-
-    return try {
-        val schemeIdx = trimmed.indexOf("://")
-        val scheme = if (schemeIdx >= 0) trimmed.substring(0, schemeIdx).uppercase() else "VPN"
-        val rest = if (schemeIdx >= 0) trimmed.substring(schemeIdx + 3) else trimmed
-        val host = if (rest.contains("@")) {
-            rest.substringAfter("@").substringBefore(":")
-        } else {
-            rest.substringBefore(":")
-        }
-        val cleanHost = if (host.length > 20) host.take(20) + "..." else host
-        "$scheme ($cleanHost)"
-    } catch (e: Exception) {
-        context.getString(R.string.notif_unnamed)
+        emptyList()
     }
 }
 
@@ -4234,12 +4204,14 @@ fun PawPrint(
 
 @Composable
 private fun LogsConsole(
+    isActive: Boolean,
     context: Context,
     cardStyle: String,
     isDark: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val vpnLogs by VpnServiceWrapper.vpnLogs.collectAsStateWithLifecycle()
+    val rawVpnLogs by VpnServiceWrapper.vpnLogs.collectAsStateWithLifecycle()
+    val vpnLogs = if (isActive) rawVpnLogs else ""
     val logLines = remember(vpnLogs) {
         if (vpnLogs.isEmpty()) {
             emptyList()

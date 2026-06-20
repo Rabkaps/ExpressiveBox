@@ -39,6 +39,7 @@ class SettingsManager(private val context: Context) {
         val AUTO_UPDATE_INTERVAL = stringPreferencesKey("auto_update_interval")
         val LAST_SUBS_UPDATE_TIME = longPreferencesKey("last_subs_update_time")
         val AUTO_CONNECT_SUBS = stringSetPreferencesKey("auto_connect_subs")
+        val SHOW_LOGS_TAB = booleanPreferencesKey("show_logs_tab")
         
         private val defaultThemeKey = if (Config.IS_SPECIAL) "cherry_blossom" else "dynamic"
 
@@ -69,6 +70,7 @@ class SettingsManager(private val context: Context) {
             autoUpdateInterval = "daily",
             lastSubsUpdateTime = 0L,
             autoConnectSubs = emptySet(),
+            showLogsTab = true,
             deserializedSubscriptions = emptyList()
         )
     }
@@ -123,6 +125,7 @@ class SettingsManager(private val context: Context) {
             autoUpdateInterval = prefs[AUTO_UPDATE_INTERVAL] ?: "daily",
             lastSubsUpdateTime = prefs[LAST_SUBS_UPDATE_TIME] ?: 0L,
             autoConnectSubs = prefs[AUTO_CONNECT_SUBS] ?: emptySet(),
+            showLogsTab = prefs[SHOW_LOGS_TAB] ?: true,
             deserializedSubscriptions = deserialized
         )
     }.distinctUntilChanged()
@@ -178,6 +181,7 @@ class SettingsManager(private val context: Context) {
     suspend fun setAutoUpdateSubs(value: Boolean) { context.dataStore.edit { it[AUTO_UPDATE_SUBS] = value } }
     suspend fun setAutoUpdateInterval(value: String) { context.dataStore.edit { it[AUTO_UPDATE_INTERVAL] = value } }
     suspend fun setLastSubsUpdateTime(value: Long) { context.dataStore.edit { it[LAST_SUBS_UPDATE_TIME] = value } }
+    suspend fun setShowLogsTab(value: Boolean) { context.dataStore.edit { it[SHOW_LOGS_TAB] = value } }
 
     val autoConnectSubs: Flow<Set<String>> = context.dataStore.data.map { it[AUTO_CONNECT_SUBS] ?: emptySet() }.distinctUntilChanged()
 
@@ -220,6 +224,7 @@ data class UserSettings(
     val autoUpdateInterval: String,
     val lastSubsUpdateTime: Long,
     val autoConnectSubs: Set<String>,
+    val showLogsTab: Boolean,
     val deserializedSubscriptions: List<Subscription>
 )
 

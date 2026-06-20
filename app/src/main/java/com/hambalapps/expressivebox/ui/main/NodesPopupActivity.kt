@@ -38,6 +38,7 @@ import com.hambalapps.expressivebox.theme.ExpressiveBoxTheme
 import com.hambalapps.expressivebox.vpn.VpnServiceWrapper
 import com.hambalapps.expressivebox.vpn.measurePingDelay
 import com.hambalapps.expressivebox.vpn.getHostAndPortFromLink
+import com.hambalapps.expressivebox.vpn.ProxyNameResolver
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.async
@@ -91,7 +92,7 @@ class NodesPopupActivity : ComponentActivity() {
                             else -> true
                         }
                         if (matchesTab) {
-                            val name = getProxyName(serverLink, context)
+                            val name = ProxyNameResolver.getProxyName(serverLink, context)
                             if (name.contains(searchQuery, ignoreCase = true)) {
                                 ServerItem(link = serverLink, name = name, type = type)
                             } else null
@@ -468,22 +469,3 @@ class NodesPopupActivity : ComponentActivity() {
     }
 }
 
-private fun getProxyName(link: String, context: Context): String {
-    val hashIdx = link.indexOf("#")
-    return if (hashIdx >= 0) {
-        try {
-            java.net.URLDecoder.decode(link.substring(hashIdx + 1), "UTF-8")
-        } catch (e: Exception) {
-            link.substring(hashIdx + 1)
-        }
-    } else {
-        try {
-            val rest = link.substringAfter("://")
-            val host = rest.substringAfter("@").substringBefore(":")
-            val scheme = link.substringBefore("://").uppercase()
-            "$scheme ($host)"
-        } catch (e: Exception) {
-            context.getString(R.string.notif_unnamed)
-        }
-    }
-}

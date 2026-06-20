@@ -171,4 +171,6 @@
     <string name="style_desc">Choose between glass or flat solid design</string>
     <string name="style_glass">Glassmorphic</string>
     <string name="style_solid">Solid Expressive</string>
+    <string name="show_logs_tab">Show Logs Tab</string>
+    <string name="show_logs_tab_desc">Display engine logs tab in bottom navigation bar</string>
 </resources>

@@ -514,12 +514,22 @@ fun ExpressiveBoxTheme(
         else -> isSystemInDarkTheme()
     }
 
-    val colorScheme = remember(isDark, dynamicColor, specialTheme, cardStyle) {
+    val defaultSeed = remember { if (Config.IS_SPECIAL) Color(0xFFD03A60) else Color(0xFF624FBE) }
+    val wallpaperSeedColorState = remember { androidx.compose.runtime.mutableStateOf(defaultSeed) }
+    androidx.compose.runtime.LaunchedEffect(context) {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val seed = getWallpaperSeedColor(context)
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                wallpaperSeedColorState.value = seed
+            }
+        }
+    }
+
+    val colorScheme = remember(isDark, dynamicColor, specialTheme, cardStyle, wallpaperSeedColorState.value) {
         val isDynamic = specialTheme == "dynamic" && dynamicColor
         val baseScheme = when {
             isDynamic -> {
-                val seedColor = getWallpaperSeedColor(context)
-                generateColorSchemeFromSeed(seedColor, isDark)
+                generateColorSchemeFromSeed(wallpaperSeedColorState.value, isDark)
             }
             else -> {
                 when (specialTheme) {
