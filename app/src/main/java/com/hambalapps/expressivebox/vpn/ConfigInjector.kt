@@ -223,7 +223,7 @@ object ConfigInjector {
         val directServer = createDnsServer("dns-direct", directDnsAddr, null)
 
         // 3. Clean Bootstrap DNS Server for resolving proxy/DNS hostnames reliably (without carrier hijacking)
-        val bootstrapDnsAddr = if (settings.bypassIran) "178.22.122.100" else "1.1.1.1"
+        val bootstrapDnsAddr = if (settings.bypassIran) "tcp://178.22.122.100" else "tcp://1.1.1.1"
         val bootstrapServer = createDnsServer("dns-bootstrap", bootstrapDnsAddr, null)
 
         if (settings.vpnMode == "gaming" && !settings.vpnModeTunnelGames) {
@@ -1202,6 +1202,114 @@ object ConfigInjector {
     }
 
     private fun resolveDomainDirectly(domain: String, dnsServerIp: String, timeoutMs: Int = 2000): String? {
+        // Clean dnsServerIp from protocol prefixes if present (e.g. tcp://)
+        val cleanDnsIp = dnsServerIp.substringAfter("tcp://").substringAfter("udp://")
+        
+        // Try TCP DNS query first to bypass UDP DNS hijacking in Iran
+        try {
+            val socket = java.net.Socket()
+            socket.connect(java.net.InetSocketAddress(cleanDnsIp, 53), timeoutMs)
+            socket.soTimeout = timeoutMs
+
+            val baos = java.io.ByteArrayOutputStream()
+            val dos = java.io.DataOutputStream(baos)
+
+            // DNS Header
+            dos.writeShort(0x1234) // Transaction ID
+            dos.writeShort(0x0100) // Flags: Standard Query
+            dos.writeShort(1)      // Questions
+            dos.writeShort(0)      // Answer RRs
+            dos.writeShort(0)      // Authority RRs
+            dos.writeShort(0)      // Additional RRs
+
+            // Question: Domain Name
+            val parts = domain.split(".")
+            for (part in parts) {
+                val bytes = part.toByteArray(java.nio.charset.StandardCharsets.UTF_8)
+                dos.writeByte(bytes.size)
+                dos.write(bytes)
+            }
+            dos.writeByte(0) // End of domain
+
+            dos.writeShort(1) // Type A
+            dos.writeShort(1) // Class IN
+
+            val queryData = baos.toByteArray()
+            
+            // For DNS over TCP, prefix the payload with its 2-byte length!
+            val outStream = socket.getOutputStream()
+            val dataOut = java.io.DataOutputStream(outStream)
+            dataOut.writeShort(queryData.size)
+            dataOut.write(queryData)
+            dataOut.flush()
+
+            val inStream = socket.getInputStream()
+            val dataIn = java.io.DataInputStream(inStream)
+            
+            // Read 2-byte response length header
+            val responseLength = dataIn.readUnsignedShort()
+            val response = ByteArray(responseLength)
+            dataIn.readFully(response)
+            socket.close()
+
+            // Parse Response
+            val responseStream = java.io.DataInputStream(java.io.ByteArrayInputStream(response))
+            val txId = responseStream.readUnsignedShort()
+            val flags = responseStream.readUnsignedShort()
+            val questions = responseStream.readUnsignedShort()
+            val answers = responseStream.readUnsignedShort()
+            val authority = responseStream.readUnsignedShort()
+            val additional = responseStream.readUnsignedShort()
+
+            // Skip Question Section
+            for (q in 0 until questions) {
+                var len = responseStream.readByte().toInt()
+                while (len > 0) {
+                    responseStream.skipBytes(len)
+                    len = responseStream.readByte().toInt()
+                }
+                responseStream.skipBytes(4)
+            }
+
+            // Parse Answers
+            for (a in 0 until answers) {
+                var b = responseStream.readByte().toInt() and 0xFF
+                while (b > 0) {
+                    if ((b and 0xC0) == 0xC0) {
+                        responseStream.readByte()
+                        break
+                    } else {
+                        responseStream.skipBytes(b)
+                        b = responseStream.readByte().toInt() and 0xFF
+                    }
+                }
+
+                val type = responseStream.readUnsignedShort()
+                val clazz = responseStream.readUnsignedShort()
+                val ttl = responseStream.readInt()
+                val dataLength = responseStream.readUnsignedShort()
+
+                if (type == 1 && dataLength == 4) { // Type A (IPv4)
+                    val ipBytes = ByteArray(4)
+                    responseStream.readFully(ipBytes)
+                    val ip = "${ipBytes[0].toInt() and 0xFF}.${ipBytes[1].toInt() and 0xFF}.${ipBytes[2].toInt() and 0xFF}.${ipBytes[3].toInt() and 0xFF}"
+                    // Verify the resolved IP is not a known hijacked IP
+                    if (ip != "10.10.34.34" && ip != "10.10.34.35" && ip != "10.10.34.36" && !ip.startsWith("127.")) {
+                        return ip
+                    }
+                } else {
+                    responseStream.skipBytes(dataLength)
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("ExpressiveBox", "TCP DNS query to $cleanDnsIp failed: ${e.message}. Falling back to UDP.")
+        }
+
+        // Fallback to UDP if TCP fails
+        return resolveDomainDirectlyUDP(domain, cleanDnsIp, timeoutMs)
+    }
+
+    private fun resolveDomainDirectlyUDP(domain: String, dnsServerIp: String, timeoutMs: Int = 2000): String? {
         try {
             val socket = java.net.DatagramSocket()
             socket.soTimeout = timeoutMs
@@ -1296,7 +1404,7 @@ object ConfigInjector {
                 }
             }
         } catch (e: Exception) {
-            android.util.Log.e("ExpressiveBox", "DNS query to $dnsServerIp failed: ${e.message}")
+            android.util.Log.e("ExpressiveBox", "UDP DNS query to $dnsServerIp failed: ${e.message}")
         }
         return null
     }
