@@ -1254,11 +1254,7 @@ object ConfigInjector {
     }
 
     private fun resolveDomainWithFallbacks(context: Context, domain: String, settings: InjectorSettings): String? {
-        val systemDns = getSystemDnsServers(context)
         val dnsServers = mutableListOf<String>()
-        
-        // Add system DNS first as it is always accessible locally
-        dnsServers.addAll(systemDns)
         
         if (settings.bypassIran) {
             // For Iran: prioritize clean domestic resolvers that bypass censorship/sanctions, then Cloudflare
@@ -1273,6 +1269,14 @@ object ConfigInjector {
                 if (!dnsServers.contains(ip)) {
                     dnsServers.add(ip)
                 }
+            }
+        }
+
+        // Add system DNS at the end as a fallback
+        val systemDns = getSystemDnsServers(context)
+        systemDns.forEach { ip ->
+            if (!dnsServers.contains(ip)) {
+                dnsServers.add(ip)
             }
         }
 
