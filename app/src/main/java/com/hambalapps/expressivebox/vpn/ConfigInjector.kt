@@ -1053,8 +1053,10 @@ object ConfigInjector {
         var type = queryParams["type"]
         val headerType = queryParams["headerType"] ?: queryParams["header_type"]
         
-        // Map type=tcp & headerType=http to http transport, and type=h2 to http transport
-        if ((type == null || type == "tcp") && headerType == "http") {
+        // Map type=tcp & headerType=http to http transport (unless it is Reality), and type=h2 to http transport
+        val security = queryParams["security"]?.lowercase()
+        val isReality = security == "reality"
+        if ((type == null || type == "tcp") && headerType == "http" && !isReality) {
             type = "http"
         } else if (type == "h2") {
             type = "http"
@@ -1286,7 +1288,7 @@ object ConfigInjector {
             val addresses = java.net.InetAddress.getAllByName(domain)
             for (addr in addresses) {
                 val ip = addr.hostAddress
-                if (ip != null && !ip.startsWith("127.") && ip != "10.10.34.34" && ip != "10.10.34.35" && ip != "10.10.34.36") {
+                if (ip != null && isPublicIp(ip)) {
                     return ip
                 }
             }
@@ -1387,8 +1389,7 @@ object ConfigInjector {
                     val ipBytes = ByteArray(4)
                     responseStream.readFully(ipBytes)
                     val ip = "${ipBytes[0].toInt() and 0xFF}.${ipBytes[1].toInt() and 0xFF}.${ipBytes[2].toInt() and 0xFF}.${ipBytes[3].toInt() and 0xFF}"
-                    // Verify the resolved IP is not a known hijacked IP
-                    if (ip != "10.10.34.34" && ip != "10.10.34.35" && ip != "10.10.34.36" && !ip.startsWith("127.")) {
+                    if (isPublicIp(ip)) {
                         return ip
                     }
                 } else {
@@ -1489,8 +1490,7 @@ object ConfigInjector {
                     val ipBytes = ByteArray(4)
                     responseStream.readFully(ipBytes)
                     val ip = "${ipBytes[0].toInt() and 0xFF}.${ipBytes[1].toInt() and 0xFF}.${ipBytes[2].toInt() and 0xFF}.${ipBytes[3].toInt() and 0xFF}"
-                    // Verify the resolved IP is not a known hijacked IP
-                    if (ip != "10.10.34.34" && ip != "10.10.34.35" && ip != "10.10.34.36" && !ip.startsWith("127.")) {
+                    if (isPublicIp(ip)) {
                         return ip
                     }
                 } else {
@@ -1501,5 +1501,24 @@ object ConfigInjector {
             android.util.Log.e("ExpressiveBox", "UDP DNS query to $dnsServerIp failed: ${e.message}")
         }
         return null
+    }
+
+    private fun isPublicIp(ip: String): Boolean {
+        if (!isIpAddress(ip)) return false
+        val parts = ip.split(".")
+        if (parts.size != 4) return false
+        try {
+            val p0 = parts[0].toInt()
+            val p1 = parts[1].toInt()
+            if (p0 == 127) return false
+            if (p0 == 10) return false
+            if (p0 == 172 && p1 in 16..31) return false
+            if (p0 == 192 && p1 == 168) return false
+            if (p0 == 169 && p1 == 254) return false
+            if (p0 == 0 || p0 >= 224) return false
+            return true
+        } catch (e: Exception) {
+            return false
+        }
     }
 }
