@@ -19,6 +19,10 @@ android {
         versionName = "1.6.9"
     }
 
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
+
     splits {
         abi {
             isEnable = true
@@ -126,6 +130,8 @@ dependencies {
   // Local tests: jUnit, coroutines, Android runner
   testImplementation(libs.junit)
   testImplementation(libs.kotlinx.coroutines.test)
+  testImplementation("org.mockito:mockito-core:5.11.0")
+  testImplementation("org.json:json:20240303")
 
   // Instrumented tests: jUnit rules and runners
   androidTestImplementation(libs.androidx.test.core)

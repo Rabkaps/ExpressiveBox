@@ -643,26 +643,35 @@ object ConfigInjector {
                 outbound.put("uuid", userInfo)
                 outbound.put("server", host)
                 outbound.put("server_port", port)
+                outbound.put("packet_encoding", "xudp")
 
+                val security = queryParams["security"]?.lowercase()
+                val isReality = security == "reality"
 
                 // Flow control (only allowed for standard TCP transport in sing-box)
                 val type = queryParams["type"]
                 val headerType = queryParams["headerType"] ?: queryParams["header_type"]
-                val isStandardTcp = (type == null || type.equals("tcp", ignoreCase = true)) && headerType != "http"
+                val isStandardTcp = (type == null || type.equals("tcp", ignoreCase = true)) && (headerType != "http" || isReality)
                 if (isStandardTcp) {
-                    queryParams["flow"]?.let { outbound.put("flow", it) }
+                    val flow = queryParams["flow"] ?: if (isReality) "xtls-rprx-vision" else null
+                    if (flow != null && flow.isNotEmpty() && flow != "none") {
+                        outbound.put("flow", flow)
+                    }
                 }
 
                 // TLS
-                val security = queryParams["security"]?.lowercase()
-                val hasTls = security == "tls" || security == "reality" || queryParams["tls"] == "true" || queryParams["tls"] == "1"
+                val hasTls = security == "tls" || isReality || queryParams["tls"] == "true" || queryParams["tls"] == "1"
                 if (hasTls) {
                     val tls = JSONObject()
                     tls.put("enabled", true)
-                    queryParams["sni"]?.let { tls.put("server_name", it) }
+                    
+                    val sni = queryParams["sni"] ?: queryParams["host"]
+                    if (sni != null && sni.isNotEmpty()) {
+                        tls.put("server_name", sni)
+                    }
 
                     // Enable uTLS if security is reality or fingerprint is specified
-                    if (security == "reality" || queryParams.containsKey("fp")) {
+                    if (isReality || queryParams.containsKey("fp")) {
                         val utls = JSONObject()
                         utls.put("enabled", true)
                         val fingerprint = queryParams["fp"] ?: "chrome"
@@ -670,7 +679,7 @@ object ConfigInjector {
                         tls.put("utls", utls)
                     }
 
-                    if (security == "reality") {
+                    if (isReality) {
                         val reality = JSONObject()
                         reality.put("enabled", true)
                         queryParams["pbk"]?.let { reality.put("public_key", it) }
@@ -687,6 +696,7 @@ object ConfigInjector {
                 outbound.put("password", userInfo)
                 outbound.put("server", host)
                 outbound.put("server_port", port)
+                outbound.put("packet_encoding", "xudp")
 
                 val tls = JSONObject()
                 tls.put("enabled", true)
@@ -1009,8 +1019,8 @@ object ConfigInjector {
         for (pair in pairs) {
             val idx = pair.indexOf("=")
             if (idx > 0) {
-                val key = URLDecoder.decode(pair.substring(0, idx), "UTF-8")
-                val value = URLDecoder.decode(pair.substring(idx + 1), "UTF-8")
+                val key = URLDecoder.decode(pair.substring(0, idx).replace("+", "%2B"), "UTF-8")
+                val value = URLDecoder.decode(pair.substring(idx + 1).replace("+", "%2B"), "UTF-8")
                 result[key] = value
             }
         }
