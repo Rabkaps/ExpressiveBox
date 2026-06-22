@@ -649,11 +649,13 @@ object ConfigInjector {
                 val isReality = security == "reality"
 
                 // Flow control (only allowed for standard TCP transport in sing-box)
+                // headerType=http is a legacy obfuscation that Reality ignores,
+                // so we skip flow injection when headerType=http to match original behavior.
                 val type = queryParams["type"]
                 val headerType = queryParams["headerType"] ?: queryParams["header_type"]
-                val isStandardTcp = (type == null || type.equals("tcp", ignoreCase = true)) && (headerType != "http" || isReality)
+                val isStandardTcp = (type == null || type.equals("tcp", ignoreCase = true)) && headerType != "http"
                 if (isStandardTcp) {
-                    val flow = queryParams["flow"] ?: if (isReality) "xtls-rprx-vision" else null
+                    val flow = queryParams["flow"]
                     if (flow != null && flow.isNotEmpty() && flow != "none") {
                         outbound.put("flow", flow)
                     }
@@ -696,7 +698,6 @@ object ConfigInjector {
                 outbound.put("password", userInfo)
                 outbound.put("server", host)
                 outbound.put("server_port", port)
-                outbound.put("packet_encoding", "xudp")
 
                 val tls = JSONObject()
                 tls.put("enabled", true)
