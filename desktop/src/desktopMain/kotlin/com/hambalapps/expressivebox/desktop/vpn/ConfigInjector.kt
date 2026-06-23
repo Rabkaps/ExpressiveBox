@@ -188,7 +188,7 @@ object ConfigInjector {
         servers.put(directServer)
 
         // 3. Clean Bootstrap DNS Server for resolving proxy/DNS hostnames reliably
-        val bootstrapDnsAddr = if (settings.bypassIran) "178.22.122.100" else "1.1.1.1"
+        val bootstrapDnsAddr = "https://8.8.8.8/dns-query"
         val bootstrapServer = createDnsServer("dns-bootstrap", bootstrapDnsAddr, null)
         servers.put(bootstrapServer)
 
@@ -320,7 +320,7 @@ object ConfigInjector {
         if (directDnsAddr.isNotEmpty() && isIpAddress(directDnsAddr)) {
             directIps.add(directDnsAddr)
         }
-        val bootstrapDnsAddr = if (settings.bypassIran) "178.22.122.100" else "1.1.1.1"
+        val bootstrapDnsAddr = "8.8.8.8"
         if (bootstrapDnsAddr.isNotEmpty() && isIpAddress(bootstrapDnsAddr)) {
             directIps.add(bootstrapDnsAddr)
         }
@@ -837,8 +837,10 @@ object ConfigInjector {
     private fun injectTransport(outbound: JSONObject, queryParams: Map<String, String>) {
         var type = queryParams["type"]?.lowercase()
         val headerType = queryParams["headerType"]?.lowercase() ?: queryParams["header_type"]?.lowercase()
-        if ((type == null || type == "tcp") && headerType == "http") {
-            type = "httpupgrade"
+        val security = queryParams["security"]?.lowercase()
+        val isReality = security == "reality"
+        if ((type == null || type == "tcp") && headerType == "http" && !isReality) {
+            type = "http"
         }
         if (type == null) return
         if (type == "ws" || type == "grpc" || type == "httpupgrade" || type == "kcp" || type == "mkcp" || type == "http") {

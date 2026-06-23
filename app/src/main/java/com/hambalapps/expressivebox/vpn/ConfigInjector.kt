@@ -223,7 +223,7 @@ object ConfigInjector {
         val directServer = createDnsServer("dns-direct", directDnsAddr, null)
 
         // 3. Clean Bootstrap DNS Server for resolving proxy/DNS hostnames reliably (without carrier hijacking)
-        val bootstrapDnsAddr = if (settings.bypassIran) "https://178.22.122.100/dns-query" else "https://1.1.1.1/dns-query"
+        val bootstrapDnsAddr = "https://8.8.8.8/dns-query"
         val bootstrapServer = createDnsServer("dns-bootstrap", bootstrapDnsAddr, null)
 
         if (settings.vpnMode == "gaming" && !settings.vpnModeTunnelGames) {
@@ -389,7 +389,7 @@ object ConfigInjector {
         if (directDnsAddr.isNotEmpty() && isIpAddress(directDnsAddr)) {
             directIps.add(directDnsAddr)
         }
-        val bootstrapDnsAddr = if (settings.bypassIran) "178.22.122.100" else "1.1.1.1"
+        val bootstrapDnsAddr = "8.8.8.8"
         if (bootstrapDnsAddr.isNotEmpty() && isIpAddress(bootstrapDnsAddr)) {
             directIps.add(bootstrapDnsAddr)
         }
@@ -1064,9 +1064,11 @@ object ConfigInjector {
         var type = queryParams["type"]
         val headerType = queryParams["headerType"] ?: queryParams["header_type"]
         
-        // Map type=tcp & headerType=http to httpupgrade transport, and type=h2 to http transport
-        if ((type == null || type == "tcp") && headerType == "http") {
-            type = "httpupgrade"
+        // Map type=tcp & headerType=http to http transport (unless it is Reality), and type=h2 to http transport
+        val security = queryParams["security"]?.lowercase()
+        val isReality = security == "reality"
+        if ((type == null || type == "tcp") && headerType == "http" && !isReality) {
+            type = "http"
         } else if (type == "h2") {
             type = "http"
         }
@@ -1262,7 +1264,45 @@ object ConfigInjector {
         }
     }
 
+    private fun resolveDomainViaDoh(domain: String, timeoutMs: Int = 3000): String? {
+        try {
+            val url = java.net.URL("https://8.8.8.8/resolve?name=$domain&type=A")
+            val conn = url.openConnection() as java.net.HttpURLConnection
+            conn.connectTimeout = timeoutMs
+            conn.readTimeout = timeoutMs
+            conn.requestMethod = "GET"
+            conn.setRequestProperty("Accept", "application/json")
+            
+            if (conn.responseCode == 200) {
+                val responseText = conn.inputStream.bufferedReader().use { it.readText() }
+                val json = JSONObject(responseText)
+                val answers = json.optJSONArray("Answer")
+                if (answers != null && answers.length() > 0) {
+                    for (i in 0 until answers.length()) {
+                        val ans = answers.getJSONObject(i)
+                        val type = ans.optInt("type")
+                        if (type == 1) { // Type A
+                            val data = ans.getString("data")
+                            if (isPublicIp(data)) {
+                                return data
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("ExpressiveBox", "DoH resolution for $domain failed: ${e.message}")
+        }
+        return null
+    }
+
     private fun resolveDomainWithFallbacks(context: Context, domain: String, settings: InjectorSettings): String? {
+        // Try secure DoH resolution first to bypass local DNS poisoning and UDP DNS hijacking
+        val dohIp = resolveDomainViaDoh(domain)
+        if (dohIp != null) {
+            return dohIp
+        }
+
         val dnsServers = mutableListOf<String>()
         
         if (settings.bypassIran) {
