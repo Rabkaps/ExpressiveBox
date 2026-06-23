@@ -838,7 +838,7 @@ object ConfigInjector {
         var type = queryParams["type"]?.lowercase()
         val headerType = queryParams["headerType"]?.lowercase() ?: queryParams["header_type"]?.lowercase()
         if ((type == null || type == "tcp") && headerType == "http") {
-            type = "http"
+            type = "httpupgrade"
         }
         if (type == null) return
         if (type == "ws" || type == "grpc" || type == "httpupgrade" || type == "kcp" || type == "mkcp" || type == "http") {
