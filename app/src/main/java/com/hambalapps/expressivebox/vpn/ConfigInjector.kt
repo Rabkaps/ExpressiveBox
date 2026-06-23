@@ -1064,10 +1064,8 @@ object ConfigInjector {
         var type = queryParams["type"]
         val headerType = queryParams["headerType"] ?: queryParams["header_type"]
         
-        // Map type=tcp & headerType=http to http transport (unless it is Reality), and type=h2 to http transport
-        val security = queryParams["security"]?.lowercase()
-        val isReality = security == "reality"
-        if ((type == null || type == "tcp") && headerType == "http" && !isReality) {
+        // Map type=tcp & headerType=http to http transport, and type=h2 to http transport
+        if ((type == null || type == "tcp") && headerType == "http") {
             type = "http"
         } else if (type == "h2") {
             type = "http"

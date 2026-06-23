@@ -835,7 +835,12 @@ object ConfigInjector {
     }
 
     private fun injectTransport(outbound: JSONObject, queryParams: Map<String, String>) {
-        val type = queryParams["type"]?.lowercase() ?: return
+        var type = queryParams["type"]?.lowercase()
+        val headerType = queryParams["headerType"]?.lowercase() ?: queryParams["header_type"]?.lowercase()
+        if ((type == null || type == "tcp") && headerType == "http") {
+            type = "http"
+        }
+        if (type == null) return
         if (type == "ws" || type == "grpc" || type == "httpupgrade" || type == "kcp" || type == "mkcp" || type == "http") {
             val transport = JSONObject()
             transport.put("type", if (type == "mkcp") "kcp" else type)
