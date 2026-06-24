@@ -4142,8 +4142,8 @@ private fun parseSubscriptionUserInfo(header: String?): SubscriptionUserInfo? {
     var download: Long? = null
     var total: Long? = null
     var expire: Long? = null
-    header.split(";").forEach { part ->
-        val pair = part.split("=")
+    header.split(Regex("[;,]")).forEach { part ->
+        val pair = if (part.contains("=")) part.split("=") else part.split(":")
         if (pair.size == 2) {
             val key = pair[0].trim().lowercase()
             val value = pair[1].trim().toLongOrNull()
@@ -4172,7 +4172,13 @@ private suspend fun fetchSubscription(urlStr: String): FetchResult = kotlinx.cor
             val rawData = connection.inputStream.bufferedReader().use { it.readText() }
             val decoded = tryBase64Decode(rawData) ?: rawData
             val servers = decoded.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
-            val userInfoHeader = connection.getHeaderField("subscription-userinfo") ?: connection.getHeaderField("Subscription-Userinfo")
+            var userInfoHeader: String? = null
+            for ((key, values) in connection.headerFields) {
+                if (key != null && (key.equals("subscription-userinfo", ignoreCase = true) || key.equals("x-user-info", ignoreCase = true))) {
+                    userInfoHeader = values.firstOrNull()
+                    break
+                }
+            }
             val parsedInfo = parseSubscriptionUserInfo(userInfoHeader)
             FetchResult(
                 servers = servers,

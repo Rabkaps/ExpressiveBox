@@ -149,10 +149,28 @@ fun CameraPreviewScanner(
     }
 
     val cameraExecutor: ExecutorService = remember { Executors.newSingleThreadExecutor() }
+    var activeCameraProvider by remember { mutableStateOf<ProcessCameraProvider?>(null) }
 
-    DisposableEffect(Unit) {
+    val options = remember {
+        BarcodeScannerOptions.Builder()
+            .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
+            .build()
+    }
+    val scanner = remember { BarcodeScanning.getClient(options) }
+
+    DisposableEffect(activeCameraProvider) {
         onDispose {
+            try {
+                activeCameraProvider?.unbindAll()
+            } catch (e: Exception) {
+                // Ignore
+            }
             cameraExecutor.shutdown()
+            try {
+                scanner.close()
+            } catch (e: Exception) {
+                // Ignore
+            }
         }
     }
 
@@ -224,14 +242,11 @@ fun CameraPreviewScanner(
                     ContextCompat.getMainExecutor(context)
                 )
             }
+            activeCameraProvider = cameraProvider
+
             val preview = Preview.Builder().build().also {
                 it.setSurfaceProvider(previewView.surfaceProvider)
             }
-
-            val options = BarcodeScannerOptions.Builder()
-                .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
-                .build()
-            val scanner = BarcodeScanning.getClient(options)
 
             var isScanningActive = true
 
