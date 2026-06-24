@@ -1,6 +1,11 @@
 package com.hambalapps.expressivebox.ui.main
 
 import android.app.Activity
+import androidx.compose.ui.platform.LocalConfiguration
+import android.content.res.Configuration
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material.icons.filled.MoreVert
 import android.content.Context
 import android.content.Intent
 import android.net.VpnService
@@ -1126,17 +1131,14 @@ fun MainScreen(
                         }
                     }
                     1 -> { // Servers Tab
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(horizontal = 16.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Spacer(modifier = Modifier.height(16.dp))
+                        val configuration = LocalConfiguration.current
+                        val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+                        val screenWidthDp = configuration.screenWidthDp
+                        val useDropdownMenu = !isLandscape || screenWidthDp < 600
 
+                        val subscriptionManagerCard: @Composable (Modifier, Modifier) -> Unit = { modifier, listModifier ->
                             Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
+                                modifier = modifier
                                     .background(brush = primaryCardBrush, shape = ExpressiveCardShape)
                                     .border(
                                         width = 1.dp,
@@ -1334,13 +1336,11 @@ fun MainScreen(
                                     } else {
                                         Spacer(modifier = Modifier.height(8.dp))
                                         Column(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .heightIn(max = 140.dp)
-                                                .verticalScroll(rememberScrollState())
+                                            modifier = listModifier
                                         ) {
                                             subscriptions.forEach { sub ->
                                                 val isActive = sub.id == activeSubId
+                                                var menuExpanded by remember { mutableStateOf(false) }
                                                 Row(
                                                     modifier = Modifier
                                                         .fillMaxWidth()
@@ -1462,150 +1462,329 @@ fun MainScreen(
                                                     }
 
                                                     val isAutoConnectEnabled = autoConnectSubs.contains(sub.id)
-                                                    IconButton(
-                                                        onClick = {
-                                                            scope.launch {
-                                                                settingsManager.toggleAutoConnectSub(sub.id)
-                                                            }
-                                                        },
-                                                        modifier = Modifier.size(36.dp)
-                                                    ) {
-                                                        Icon(
-                                                            imageVector = Icons.Default.Bolt,
-                                                            contentDescription = "Auto Connect Toggle",
-                                                            tint = if (isAutoConnectEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-                                                            modifier = Modifier.size(20.dp)
-                                                        )
-                                                    }
-
                                                     val isLocalSub = sub.url.startsWith("local://")
-                                                    if (!isLocalSub) {
-                                                        val isRefreshing = refreshingSubs[sub.id] ?: false
+                                                    val isRefreshing = refreshingSubs[sub.id] ?: false
+
+                                                    if (useDropdownMenu) {
+                                                        Box {
+                                                            IconButton(
+                                                                onClick = { menuExpanded = true },
+                                                                modifier = Modifier.size(36.dp)
+                                                            ) {
+                                                                Icon(
+                                                                    imageVector = Icons.Default.MoreVert,
+                                                                    contentDescription = "Subscription options",
+                                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                                                )
+                                                            }
+                                                            
+                                                            DropdownMenu(
+                                                                expanded = menuExpanded,
+                                                                onDismissRequest = { menuExpanded = false },
+                                                                modifier = Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                                                            ) {
+                                                                DropdownMenuItem(
+                                                                    text = {
+                                                                        Text(
+                                                                            text = if (isAutoConnectEnabled) "Auto Connect (Enabled)" else "Auto Connect",
+                                                                            style = MaterialTheme.typography.bodyMedium
+                                                                        )
+                                                                    },
+                                                                    onClick = {
+                                                                        menuExpanded = false
+                                                                        scope.launch {
+                                                                            settingsManager.toggleAutoConnectSub(sub.id)
+                                                                        }
+                                                                    },
+                                                                    leadingIcon = {
+                                                                        Icon(
+                                                                            imageVector = Icons.Default.Bolt,
+                                                                            contentDescription = null,
+                                                                            tint = if (isAutoConnectEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                                                            modifier = Modifier.size(20.dp)
+                                                                        )
+                                                                    }
+                                                                )
+                                                                if (!isLocalSub) {
+                                                                    DropdownMenuItem(
+                                                                        text = { Text("Refresh", style = MaterialTheme.typography.bodyMedium) },
+                                                                        onClick = {
+                                                                            menuExpanded = false
+                                                                            scope.launch {
+                                                                                refreshingSubs[sub.id] = true
+                                                                                try {
+                                                                                    val result = fetchSubscription(sub.url)
+                                                                                    if (result.servers.isNotEmpty()) {
+                                                                                        val updatedList = subscriptions.map {
+                                                                                            if (it.id == sub.id) {
+                                                                                                it.copy(
+                                                                                                    servers = result.servers.joinToString("\n"),
+                                                                                                    upload = result.upload,
+                                                                                                    download = result.download,
+                                                                                                    total = result.total,
+                                                                                                    expire = result.expire
+                                                                                                )
+                                                                                            } else {
+                                                                                                it
+                                                                                            }
+                                                                                        }
+                                                                                        settingsManager.setSubscriptionList(serializeSubscriptions(updatedList.filter { !it.url.startsWith("local://") }))
+                                                                                        if (isActive) {
+                                                                                            val currentActive = activeProfile
+                                                                                            val sList = result.servers.map { it.trim() }.filter { it.isNotEmpty() }
+                                                                                            if (sList.isNotEmpty() && !sList.contains(currentActive)) {
+                                                                                                settingsManager.setActiveProfile(sList[0])
+                                                                                                if (vpnState == "CONNECTED") {
+                                                                                                    startVpnService(context)
+                                                                                                }
+                                                                                            }
+                                                                                        }
+                                                                                        android.widget.Toast.makeText(context, context.getString(R.string.toast_updated, sub.name), android.widget.Toast.LENGTH_SHORT).show()
+                                                                                    } else {
+                                                                                        android.widget.Toast.makeText(context, context.getString(R.string.toast_no_servers), android.widget.Toast.LENGTH_SHORT).show()
+                                                                                    }
+                                                                                } catch(e: Exception) {
+                                                                                    android.widget.Toast.makeText(context, context.getString(R.string.toast_update_failed, e.message ?: ""), android.widget.Toast.LENGTH_SHORT).show()
+                                                                                } finally {
+                                                                                    refreshingSubs[sub.id] = false
+                                                                                }
+                                                                            }
+                                                                        },
+                                                                        leadingIcon = {
+                                                                            if (isRefreshing) {
+                                                                                LoadingIndicator(
+                                                                                    modifier = Modifier.size(18.dp),
+                                                                                    color = MaterialTheme.colorScheme.primary
+                                                                                )
+                                                                            } else {
+                                                                                Icon(
+                                                                                    imageVector = Icons.Default.Refresh,
+                                                                                    contentDescription = null,
+                                                                                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
+                                                                                    modifier = Modifier.size(20.dp)
+                                                                                )
+                                                                            }
+                                                                        },
+                                                                        enabled = !isRefreshing
+                                                                    )
+
+                                                                    DropdownMenuItem(
+                                                                        text = { Text("Share Link", style = MaterialTheme.typography.bodyMedium) },
+                                                                        onClick = {
+                                                                            menuExpanded = false
+                                                                            val sendIntent = Intent().apply {
+                                                                                action = Intent.ACTION_SEND
+                                                                                putExtra(Intent.EXTRA_TEXT, sub.url)
+                                                                                this.type = "text/plain"
+                                                                            }
+                                                                            val shareIntent = Intent.createChooser(sendIntent, null)
+                                                                            context.startActivity(shareIntent)
+                                                                        },
+                                                                        leadingIcon = {
+                                                                            Icon(
+                                                                                imageVector = Icons.Default.Share,
+                                                                                contentDescription = null,
+                                                                                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
+                                                                                modifier = Modifier.size(18.dp)
+                                                                            )
+                                                                        }
+                                                                    )
+
+                                                                    DropdownMenuItem(
+                                                                        text = { Text("Share QR Code", style = MaterialTheme.typography.bodyMedium) },
+                                                                        onClick = {
+                                                                            menuExpanded = false
+                                                                            qrCodeToShare = Pair(sub.name, sub.url)
+                                                                        },
+                                                                        leadingIcon = {
+                                                                            Icon(
+                                                                                imageVector = Icons.Default.QrCode,
+                                                                                contentDescription = null,
+                                                                                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
+                                                                                modifier = Modifier.size(18.dp)
+                                                                            )
+                                                                        }
+                                                                    )
+                                                                }
+                                                                DropdownMenuItem(
+                                                                    text = { Text("Delete", style = MaterialTheme.typography.bodyMedium) },
+                                                                    onClick = {
+                                                                        menuExpanded = false
+                                                                        scope.launch {
+                                                                            val updatedList = subscriptions.filter { it != sub }
+                                                                            settingsManager.setSubscriptionList(serializeSubscriptions(updatedList.filter { !it.url.startsWith("local://") }))
+                                                                            if (isActive) {
+                                                                                val nextActive = updatedList.firstOrNull()
+                                                                                if (nextActive != null) {
+                                                                                    settingsManager.setActiveSubId(nextActive.id)
+                                                                                    val nextServers = nextActive.servers.split("\n").filter { it.isNotEmpty() }
+                                                                                    if (nextServers.isNotEmpty()) {
+                                                                                        settingsManager.setActiveProfile(nextServers[0])
+                                                                                    }
+                                                                                } else {
+                                                                                    settingsManager.setActiveSubId("")
+                                                                                }
+                                                                                if (vpnState == "CONNECTED") {
+                                                                                    startVpnService(context)
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                    },
+                                                                    leadingIcon = {
+                                                                        Icon(
+                                                                            imageVector = Icons.Default.Delete,
+                                                                            contentDescription = null,
+                                                                            tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
+                                                                            modifier = Modifier.size(20.dp)
+                                                                        )
+                                                                    }
+                                                                )
+                                                            }
+                                                        }
+                                                    } else {
                                                         IconButton(
                                                             onClick = {
                                                                 scope.launch {
-                                                                    refreshingSubs[sub.id] = true
-                                                                    try {
-                                                                        val result = fetchSubscription(sub.url)
-                                                                        if (result.servers.isNotEmpty()) {
-                                                                            val updatedList = subscriptions.map {
-                                                                                if (it.id == sub.id) {
-                                                                                    it.copy(
-                                                                                        servers = result.servers.joinToString("\n"),
-                                                                                        upload = result.upload,
-                                                                                        download = result.download,
-                                                                                        total = result.total,
-                                                                                        expire = result.expire
-                                                                                    )
-                                                                                } else {
-                                                                                    it
-                                                                                }
-                                                                            }
-                                                                            settingsManager.setSubscriptionList(serializeSubscriptions(updatedList.filter { !it.url.startsWith("local://") }))
-                                                                            if (isActive) {
-                                                                                val currentActive = activeProfile
-                                                                                val sList = result.servers.map { it.trim() }.filter { it.isNotEmpty() }
-                                                                                if (sList.isNotEmpty() && !sList.contains(currentActive)) {
-                                                                                    settingsManager.setActiveProfile(sList[0])
-                                                                                    if (vpnState == "CONNECTED") {
-                                                                                        startVpnService(context)
+                                                                    settingsManager.toggleAutoConnectSub(sub.id)
+                                                                }
+                                                            },
+                                                            modifier = Modifier.size(36.dp)
+                                                        ) {
+                                                            Icon(
+                                                                imageVector = Icons.Default.Bolt,
+                                                                contentDescription = "Auto Connect Toggle",
+                                                                tint = if (isAutoConnectEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                                                                modifier = Modifier.size(20.dp)
+                                                            )
+                                                        }
+
+                                                        if (!isLocalSub) {
+                                                            IconButton(
+                                                                onClick = {
+                                                                    scope.launch {
+                                                                        refreshingSubs[sub.id] = true
+                                                                        try {
+                                                                            val result = fetchSubscription(sub.url)
+                                                                            if (result.servers.isNotEmpty()) {
+                                                                                val updatedList = subscriptions.map {
+                                                                                    if (it.id == sub.id) {
+                                                                                        it.copy(
+                                                                                            servers = result.servers.joinToString("\n"),
+                                                                                            upload = result.upload,
+                                                                                            download = result.download,
+                                                                                            total = result.total,
+                                                                                            expire = result.expire
+                                                                                        )
+                                                                                    } else {
+                                                                                        it
                                                                                     }
                                                                                 }
+                                                                                settingsManager.setSubscriptionList(serializeSubscriptions(updatedList.filter { !it.url.startsWith("local://") }))
+                                                                                if (isActive) {
+                                                                                    val currentActive = activeProfile
+                                                                                    val sList = result.servers.map { it.trim() }.filter { it.isNotEmpty() }
+                                                                                    if (sList.isNotEmpty() && !sList.contains(currentActive)) {
+                                                                                        settingsManager.setActiveProfile(sList[0])
+                                                                                        if (vpnState == "CONNECTED") {
+                                                                                            startVpnService(context)
+                                                                                        }
+                                                                                    }
+                                                                                }
+                                                                                android.widget.Toast.makeText(context, context.getString(R.string.toast_updated, sub.name), android.widget.Toast.LENGTH_SHORT).show()
+                                                                            } else {
+                                                                                android.widget.Toast.makeText(context, context.getString(R.string.toast_no_servers), android.widget.Toast.LENGTH_SHORT).show()
                                                                             }
-                                                                            android.widget.Toast.makeText(context, context.getString(R.string.toast_updated, sub.name), android.widget.Toast.LENGTH_SHORT).show()
-                                                                        } else {
-                                                                            android.widget.Toast.makeText(context, context.getString(R.string.toast_no_servers), android.widget.Toast.LENGTH_SHORT).show()
+                                                                        } catch(e: Exception) {
+                                                                            android.widget.Toast.makeText(context, context.getString(R.string.toast_update_failed, e.message ?: ""), android.widget.Toast.LENGTH_SHORT).show()
+                                                                        } finally {
+                                                                            refreshingSubs[sub.id] = false
                                                                         }
-                                                                    } catch(e: Exception) {
-                                                                        android.widget.Toast.makeText(context, context.getString(R.string.toast_update_failed, e.message ?: ""), android.widget.Toast.LENGTH_SHORT).show()
-                                                                    } finally {
-                                                                        refreshingSubs[sub.id] = false
                                                                     }
+                                                                },
+                                                                modifier = Modifier.size(36.dp),
+                                                                enabled = !isRefreshing
+                                                            ) {
+                                                                if (isRefreshing) {
+                                                                    LoadingIndicator(
+                                                                        modifier = Modifier.size(18.dp),
+                                                                        color = MaterialTheme.colorScheme.primary
+                                                                    )
+                                                                } else {
+                                                                    Icon(
+                                                                        imageVector = Icons.Default.Refresh,
+                                                                        contentDescription = stringResource(R.string.refresh_label),
+                                                                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
+                                                                        modifier = Modifier.size(20.dp)
+                                                                    )
                                                                 }
-                                                            },
-                                                            modifier = Modifier.size(36.dp),
-                                                            enabled = !isRefreshing
-                                                        ) {
-                                                            if (isRefreshing) {
-                                                                LoadingIndicator(
-                                                                    modifier = Modifier.size(18.dp),
-                                                                    color = MaterialTheme.colorScheme.primary
-                                                                )
-                                                            } else {
+                                                            }
+
+                                                            IconButton(
+                                                                onClick = {
+                                                                    val sendIntent = Intent().apply {
+                                                                        action = Intent.ACTION_SEND
+                                                                        putExtra(Intent.EXTRA_TEXT, sub.url)
+                                                                        this.type = "text/plain"
+                                                                    }
+                                                                    val shareIntent = Intent.createChooser(sendIntent, null)
+                                                                    context.startActivity(shareIntent)
+                                                                },
+                                                                modifier = Modifier.size(36.dp)
+                                                            ) {
                                                                 Icon(
-                                                                    imageVector = Icons.Default.Refresh,
-                                                                    contentDescription = stringResource(R.string.refresh_label),
+                                                                    imageVector = Icons.Default.Share,
+                                                                    contentDescription = "Share",
                                                                     tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
-                                                                    modifier = Modifier.size(20.dp)
+                                                                    modifier = Modifier.size(18.dp)
+                                                                )
+                                                            }
+
+                                                            IconButton(
+                                                                onClick = {
+                                                                    qrCodeToShare = Pair(sub.name, sub.url)
+                                                                },
+                                                                modifier = Modifier.size(36.dp)
+                                                            ) {
+                                                                Icon(
+                                                                    imageVector = Icons.Default.QrCode,
+                                                                    contentDescription = "QR Share",
+                                                                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
+                                                                    modifier = Modifier.size(18.dp)
                                                                 )
                                                             }
                                                         }
 
                                                         IconButton(
                                                             onClick = {
-                                                                val sendIntent = Intent().apply {
-                                                                    action = Intent.ACTION_SEND
-                                                                    putExtra(Intent.EXTRA_TEXT, sub.url)
-                                                                    type = "text/plain"
-                                                                }
-                                                                val shareIntent = Intent.createChooser(sendIntent, null)
-                                                                context.startActivity(shareIntent)
-                                                            },
-                                                            modifier = Modifier.size(36.dp)
-                                                        ) {
-                                                            Icon(
-                                                                imageVector = Icons.Default.Share,
-                                                                contentDescription = "Share",
-                                                                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
-                                                                modifier = Modifier.size(18.dp)
-                                                            )
-                                                        }
-
-                                                        IconButton(
-                                                            onClick = {
-                                                                qrCodeToShare = Pair(sub.name, sub.url)
-                                                            },
-                                                            modifier = Modifier.size(36.dp)
-                                                        ) {
-                                                            Icon(
-                                                                imageVector = Icons.Default.QrCode,
-                                                                contentDescription = "QR Share",
-                                                                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
-                                                                modifier = Modifier.size(18.dp)
-                                                            )
-                                                        }
-                                                    }
-                                                    
-                                                    IconButton(
-                                                        onClick = {
-                                                            scope.launch {
-                                                                val updatedList = subscriptions.filter { it != sub }
-                                                                settingsManager.setSubscriptionList(serializeSubscriptions(updatedList.filter { !it.url.startsWith("local://") }))
-                                                                if (isActive) {
-                                                                    val nextActive = updatedList.firstOrNull()
-                                                                    if (nextActive != null) {
-                                                                        settingsManager.setActiveSubId(nextActive.id)
-                                                                        val nextServers = nextActive.servers.split("\n").filter { it.isNotEmpty() }
-                                                                        if (nextServers.isNotEmpty()) {
-                                                                            settingsManager.setActiveProfile(nextServers[0])
+                                                                scope.launch {
+                                                                    val updatedList = subscriptions.filter { it != sub }
+                                                                    settingsManager.setSubscriptionList(serializeSubscriptions(updatedList.filter { !it.url.startsWith("local://") }))
+                                                                    if (isActive) {
+                                                                        val nextActive = updatedList.firstOrNull()
+                                                                        if (nextActive != null) {
+                                                                            settingsManager.setActiveSubId(nextActive.id)
+                                                                            val nextServers = nextActive.servers.split("\n").filter { it.isNotEmpty() }
+                                                                            if (nextServers.isNotEmpty()) {
+                                                                                settingsManager.setActiveProfile(nextServers[0])
+                                                                            }
+                                                                        } else {
+                                                                            settingsManager.setActiveSubId("")
                                                                         }
-                                                                    } else {
-                                                                        settingsManager.setActiveSubId("")
-                                                                    }
-                                                                    if (vpnState == "CONNECTED") {
-                                                                        startVpnService(context)
+                                                                        if (vpnState == "CONNECTED") {
+                                                                            startVpnService(context)
+                                                                        }
                                                                     }
                                                                 }
-                                                            }
-                                                        },
-                                                        modifier = Modifier.size(36.dp)
-                                                    ) {
-                                                        Icon(
-                                                            imageVector = Icons.Default.Delete,
-                                                            contentDescription = "Delete",
-                                                            tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
-                                                            modifier = Modifier.size(20.dp)
-                                                        )
+                                                            },
+                                                            modifier = Modifier.size(36.dp)
+                                                        ) {
+                                                            Icon(
+                                                                imageVector = Icons.Default.Delete,
+                                                                contentDescription = "Delete",
+                                                                tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
+                                                                modifier = Modifier.size(20.dp)
+                                                            )
+                                                        }
                                                     }
                                                 }
                                             }
@@ -1649,10 +1828,10 @@ fun MainScreen(
                                     }
                                 }
                             }
+                        }
 
-                            Spacer(modifier = Modifier.height(16.dp))
-
-                            Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                        val availableNodesCard: @Composable (Modifier, Modifier) -> Unit = { modifier, listModifier ->
+                            Box(modifier = modifier) {
                                 if (Config.IS_SPECIAL) {
                                     PeakingKitty(
                                         modifier = Modifier
@@ -1662,8 +1841,7 @@ fun MainScreen(
                                 }
                                 Card(
                                     modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(300.dp)
+                                        .fillMaxSize()
                                         .background(brush = primaryCardBrush, shape = ExpressiveCardShape)
                                         .border(
                                             width = 1.dp,
@@ -1697,7 +1875,7 @@ fun MainScreen(
                                                     color = MaterialTheme.colorScheme.onSurface
                                                 )
                                             }
- 
+
                                             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                                 IconButton(
                                                     onClick = { 
@@ -1711,7 +1889,7 @@ fun MainScreen(
                                                         tint = if (isSearchVisible) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                                                     )
                                                 }
- 
+
                                                 IconButton(
                                                     onClick = {
                                                         if (!isTestingPings) {
@@ -1762,7 +1940,7 @@ fun MainScreen(
                                                 }
                                             }
                                         }
- 
+
                                         AnimatedVisibility(
                                             visible = isSearchVisible,
                                             enter = expandVertically() + fadeIn(),
@@ -1788,9 +1966,9 @@ fun MainScreen(
                                                 )
                                             }
                                         }
- 
+
                                         Spacer(modifier = Modifier.height(10.dp))
- 
+
                                         ScrollableTabRow(
                                             selectedTabIndex = selectedTab,
                                             edgePadding = 0.dp,
@@ -1821,12 +1999,10 @@ fun MainScreen(
                                             }
                                         }
                                         Spacer(modifier = Modifier.height(12.dp))
- 
+
                                         if (filteredServerList.isEmpty()) {
                                             Box(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .weight(1f),
+                                                modifier = listModifier,
                                                 contentAlignment = Alignment.Center
                                             ) {
                                                 Text(
@@ -1837,9 +2013,7 @@ fun MainScreen(
                                             }
                                         } else {
                                             LazyColumn(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .weight(1f),
+                                                modifier = listModifier,
                                                 verticalArrangement = Arrangement.spacedBy(6.dp)
                                             ) {
                                                 itemsIndexed(filteredServerList, key = { _, item -> item.link }) { index, serverItem ->
@@ -1935,25 +2109,26 @@ fun MainScreen(
                                                                         softWrap = false
                                                                     )
                                                                 }
-
-                                                                Spacer(modifier = Modifier.width(4.dp))
-
-                                                                Box(
-                                                                    modifier = Modifier
-                                                                        .clip(ExpressiveChipShape)
-                                                                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f))
-                                                                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                                                                ) {
-                                                                    Text(
-                                                                        text = transport,
-                                                                        style = MaterialTheme.typography.labelSmall,
-                                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                                        fontWeight = FontWeight.Bold,
-                                                                        maxLines = 1,
-                                                                        softWrap = false
-                                                                    )
-                                                                }
                                                                 
+                                                                if (transport.isNotEmpty()) {
+                                                                    Spacer(modifier = Modifier.width(4.dp))
+                                                                    Box(
+                                                                        modifier = Modifier
+                                                                            .clip(ExpressiveChipShape)
+                                                                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f))
+                                                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                                                    ) {
+                                                                        Text(
+                                                                            text = transport,
+                                                                            style = MaterialTheme.typography.labelSmall,
+                                                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                                            fontWeight = FontWeight.Bold,
+                                                                            maxLines = 1,
+                                                                            softWrap = false
+                                                                        )
+                                                                    }
+                                                                }
+
                                                                 Spacer(modifier = Modifier.width(8.dp))
  
                                                                 val ping = pingsMap[serverLink]
@@ -1981,12 +2156,6 @@ fun MainScreen(
                                                                         softWrap = false
                                                                     )
                                                                 } else {
-                                                                    Box(
-                                                                        modifier = Modifier
-                                                                            .size(6.dp)
-                                                                            .clip(CircleShape)
-                                                                            .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
-                                                                    )
                                                                     Spacer(modifier = Modifier.width(4.dp))
                                                                     Text(
                                                                         text = stringResource(R.string.untested),
@@ -1998,6 +2167,7 @@ fun MainScreen(
                                                                 }
                                                             }
                                                         }
+                                                        
                                                         Row(
                                                             verticalAlignment = Alignment.CenterVertically,
                                                             horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -2021,7 +2191,7 @@ fun MainScreen(
                                                                     modifier = Modifier.size(18.dp)
                                                                 )
                                                             }
- 
+                                                            
                                                             IconButton(
                                                                 onClick = {
                                                                     qrCodeToShare = Pair(name, serverLink)
@@ -2035,7 +2205,7 @@ fun MainScreen(
                                                                     modifier = Modifier.size(18.dp)
                                                                 )
                                                             }
- 
+
                                                             if (activeSubId == "manual") {
                                                                 IconButton(
                                                                     onClick = {
@@ -2051,7 +2221,7 @@ fun MainScreen(
                                                                         modifier = Modifier.size(18.dp)
                                                                     )
                                                                 }
- 
+
                                                                 IconButton(
                                                                     onClick = {
                                                                         scope.launch {
@@ -2085,10 +2255,44 @@ fun MainScreen(
                                     }
                                 }
                             }
-                            Spacer(modifier = Modifier.height(16.dp))
                         }
-                    }
-                    2 -> { // Logs Tab
+
+                        if (isLandscape) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                subscriptionManagerCard(
+                                    Modifier.weight(1.1f).fillMaxHeight(),
+                                    Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())
+                                )
+                                availableNodesCard(
+                                    Modifier.weight(1f).fillMaxHeight(),
+                                    Modifier.fillMaxWidth().weight(1f)
+                                )
+                            }
+                        } else {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(horizontal = 16.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Spacer(modifier = Modifier.height(16.dp))
+                                subscriptionManagerCard(
+                                    Modifier.fillMaxWidth(),
+                                    Modifier.fillMaxWidth().heightIn(max = 140.dp).verticalScroll(rememberScrollState())
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                                availableNodesCard(
+                                    Modifier.fillMaxWidth().weight(1f),
+                                    Modifier.fillMaxWidth().weight(1f)
+                                )
+                            }
+                        }
+                    }                    2 -> { // Logs Tab
                         Column(
                             modifier = Modifier
                                 .fillMaxSize()
