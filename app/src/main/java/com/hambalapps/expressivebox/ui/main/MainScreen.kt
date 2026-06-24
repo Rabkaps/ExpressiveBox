@@ -23,6 +23,7 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.res.stringResource
 import com.hambalapps.expressivebox.R
@@ -90,9 +91,9 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.text.selection.SelectionContainer
 
 // Expressive shapes defining Material 3 Expressive aesthetics
-private val ExpressiveCardShape = RoundedCornerShape(topStart = 32.dp, bottomEnd = 32.dp, topEnd = 8.dp, bottomStart = 8.dp)
-private val ExpressiveButtonShape = RoundedCornerShape(topStart = 16.dp, bottomEnd = 16.dp, topEnd = 4.dp, bottomStart = 4.dp)
-private val ExpressiveChipShape = RoundedCornerShape(topStart = 8.dp, bottomEnd = 8.dp, topEnd = 2.dp, bottomStart = 2.dp)
+private val ExpressiveCardShape = RoundedCornerShape(24.dp)
+private val ExpressiveButtonShape = RoundedCornerShape(16.dp)
+private val ExpressiveChipShape = RoundedCornerShape(12.dp)
 
 private fun compositeColor(foreground: Color, background: Color): Color {
     val alpha = foreground.alpha
@@ -144,7 +145,9 @@ fun MainScreen(
     val warpPrivateKey = settings.warpPrivateKey
     val warpPublicKey = settings.warpPublicKey
     val warpIpAddress = settings.warpIpAddress
+    val warpClientId = settings.warpClientId
     val vpnModeTunnelGames = settings.vpnModeTunnelGames
+    val delayTestUrl = settings.delayTestUrl
 
     val subscriptions = settings.deserializedSubscriptions
     val activeSubscription = remember(subscriptions, activeSubId) {
@@ -488,6 +491,7 @@ fun MainScreen(
 
     ModalNavigationDrawer(
         drawerState = drawerState,
+        gesturesEnabled = pagerState.currentPage == 0,
         drawerContent = {
             ModalDrawerSheet(
                 modifier = Modifier
@@ -632,7 +636,18 @@ fun MainScreen(
                             }
                         },
                         navigationIcon = {
-                            IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                            IconButton(
+                                onClick = { scope.launch { drawerState.open() } },
+                                modifier = Modifier.pointerInput(Unit) {
+                                    detectHorizontalDragGestures(
+                                        onHorizontalDrag = { _, dragAmount ->
+                                            if (dragAmount > 10f) {
+                                                scope.launch { drawerState.open() }
+                                            }
+                                        }
+                                    )
+                                }
+                            ) {
                                 Icon(
                                     imageVector = Icons.Default.Menu,
                                     contentDescription = stringResource(R.string.open_settings_drawer),
@@ -730,6 +745,7 @@ fun MainScreen(
                                 state = vpnState,
                                 cardStyle = cardStyle,
                                 isDark = isDark,
+                                delayTestUrl = delayTestUrl,
                                 onConnectToggle = {
                                     if (vpnState == "CONNECTED") {
                                         stopVpnService(context)
@@ -802,7 +818,7 @@ fun MainScreen(
                                                     )
                                                     .clickable {
                                                         if (modeKey == "ai_bypass") {
-                                                            if (warpPrivateKey.isEmpty()) {
+                                                            if (warpPrivateKey.isEmpty() || warpClientId.isEmpty()) {
                                                                 isRegisteringWarp = true
                                                                 scope.launch {
                                                                     val creds = com.hambalapps.expressivebox.vpn.registerWarpAccount()
@@ -811,7 +827,8 @@ fun MainScreen(
                                                                         settingsManager.setWarpCredentials(
                                                                             creds.privateKey,
                                                                             creds.publicKey,
-                                                                            creds.ipAddress
+                                                                            creds.ipAddress,
+                                                                            creds.clientId
                                                                         )
                                                                         settingsManager.setVpnMode("ai_bypass")
                                                                         if (vpnState == "CONNECTED") {
@@ -944,7 +961,7 @@ fun MainScreen(
                                             brush = cardBorderBrush,
                                             shape = ExpressiveCardShape
                                         )
-                                        .clickable { scope.launch { pagerState.animateScrollToPage(1) } }
+                                        .clickable { scope.launch { pagerState.animateScrollToPage(0) } }
                                         .pressScaleEffect(),
                                     shape = ExpressiveCardShape,
                                     colors = CardDefaults.cardColors(
@@ -959,57 +976,67 @@ fun MainScreen(
                                             color = MaterialTheme.colorScheme.onSurface
                                         )
                                         Spacer(modifier = Modifier.height(12.dp))
-                                        if (activeProfile.isNotEmpty()) {
-                                            Row(
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .clip(ExpressiveButtonShape)
-                                                    .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))
-                                                    .border(
-                                                        width = 1.dp,
-                                                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
-                                                        shape = ExpressiveButtonShape
-                                                    )
-                                                    .padding(12.dp)
-                                            ) {
-                                                Box(
+                                        AnimatedContent(
+                                            targetState = activeProfile,
+                                            transitionSpec = {
+                                                (fadeIn(animationSpec = tween(220, delayMillis = 90)) + 
+                                                 scaleIn(initialScale = 0.92f, animationSpec = tween(220, delayMillis = 90)))
+                                                .togetherWith(fadeOut(animationSpec = tween(90)))
+                                            },
+                                            label = "ActiveProfileContent"
+                                        ) { targetProfile ->
+                                            if (targetProfile.isNotEmpty()) {
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
                                                     modifier = Modifier
-                                                        .size(36.dp)
-                                                        .clip(CircleShape)
-                                                        .background(MaterialTheme.colorScheme.primary),
-                                                    contentAlignment = Alignment.Center
+                                                        .fillMaxWidth()
+                                                        .clip(ExpressiveButtonShape)
+                                                        .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))
+                                                        .border(
+                                                            width = 1.dp,
+                                                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                                                            shape = ExpressiveButtonShape
+                                                        )
+                                                        .padding(12.dp)
                                                 ) {
-                                                    Icon(
-                                                        imageVector = Icons.Default.Check,
-                                                        contentDescription = "Active",
-                                                        tint = MaterialTheme.colorScheme.onPrimary,
-                                                        modifier = Modifier.size(20.dp)
-                                                    )
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .size(36.dp)
+                                                            .clip(CircleShape)
+                                                            .background(MaterialTheme.colorScheme.primary),
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.Check,
+                                                            contentDescription = "Active",
+                                                            tint = MaterialTheme.colorScheme.onPrimary,
+                                                            modifier = Modifier.size(20.dp)
+                                                        )
+                                                    }
+                                                    Spacer(modifier = Modifier.width(12.dp))
+                                                    Column(modifier = Modifier.weight(1f)) {
+                                                        Text(
+                                                            text = if (targetProfile.startsWith("{")) stringResource(R.string.custom_json) else ProxyNameResolver.getProxyName(targetProfile, context),
+                                                            style = MaterialTheme.typography.bodyMedium,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = MaterialTheme.colorScheme.onSurface,
+                                                            maxLines = 1,
+                                                            overflow = TextOverflow.Ellipsis
+                                                        )
+                                                        Text(
+                                                            text = if (targetProfile.startsWith("{")) "JSON" else targetProfile.substringBefore("://").uppercase(),
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                        )
+                                                    }
                                                 }
-                                                Spacer(modifier = Modifier.width(12.dp))
-                                                Column(modifier = Modifier.weight(1f)) {
-                                                    Text(
-                                                        text = if (activeProfile.startsWith("{")) stringResource(R.string.custom_json) else ProxyNameResolver.getProxyName(activeProfile, context),
-                                                        style = MaterialTheme.typography.bodyMedium,
-                                                        fontWeight = FontWeight.Bold,
-                                                        color = MaterialTheme.colorScheme.onSurface,
-                                                        maxLines = 1,
-                                                        overflow = TextOverflow.Ellipsis
-                                                    )
-                                                    Text(
-                                                        text = if (activeProfile.startsWith("{")) "JSON" else activeProfile.substringBefore("://").uppercase(),
-                                                        style = MaterialTheme.typography.labelSmall,
-                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                    )
-                                                }
+                                            } else {
+                                                Text(
+                                                    text = stringResource(R.string.no_profile_active),
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    style = MaterialTheme.typography.bodyMedium
+                                                )
                                             }
-                                        } else {
-                                            Text(
-                                                text = stringResource(R.string.no_profile_active),
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                style = MaterialTheme.typography.bodyMedium
-                                            )
                                         }
                                     }
                                 }
@@ -2415,6 +2442,46 @@ fun MainScreen(
                                         }
                                         Switch(checked = showLogsTab, onCheckedChange = { scope.launch { settingsManager.setShowLogsTab(it) } })
                                     }
+
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                    Spacer(modifier = Modifier.height(16.dp))
+
+                                    Column(modifier = Modifier.fillMaxWidth()) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(Icons.Default.Speed, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                            Spacer(modifier = Modifier.width(12.dp))
+                                            Column {
+                                                Text(stringResource(R.string.delay_test_url_title), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                                                Text(stringResource(R.string.delay_test_url_desc), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            }
+                                        }
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .horizontalScroll(rememberScrollState()),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            listOf(
+                                                "http://cp.cloudflare.com/generate_204" to "Cloudflare",
+                                                "http://www.google.com/generate_204" to "Google",
+                                                "http://www.gstatic.com/generate_204" to "GStatic",
+                                                "http://play.googleapis.com/generate_204" to "Google Play"
+                                            ).forEach { (urlVal, label) ->
+                                                FilterChip(
+                                                    selected = delayTestUrl == urlVal,
+                                                    onClick = { scope.launch { settingsManager.setDelayTestUrl(urlVal) } },
+                                                    label = { Text(label) },
+                                                    shape = ExpressiveButtonShape
+                                                )
+                                            }
+                                        }
+                                    }
+
                                     if (showLiveNotification) {
                                         Spacer(modifier = Modifier.height(8.dp))
                                         Text(
@@ -3921,6 +3988,7 @@ fun ConnectionDashboard(
     state: String,
     cardStyle: String,
     isDark: Boolean,
+    delayTestUrl: String,
     onConnectToggle: () -> Unit
 ) {
     val context = LocalContext.current
@@ -3965,27 +4033,68 @@ fun ConnectionDashboard(
         }
     }
 
-    val buttonIconColor = when (state) {
-        "CONNECTED" -> MaterialTheme.colorScheme.onPrimary
-        "CONNECTING" -> MaterialTheme.colorScheme.onSecondary
-        "DISCONNECTING" -> MaterialTheme.colorScheme.onError
-        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    val buttonIconColor by transition.animateColor(label = "ButtonIconColor") { s ->
+        when (s) {
+            "CONNECTED" -> MaterialTheme.colorScheme.onPrimary
+            "CONNECTING" -> MaterialTheme.colorScheme.onSecondary
+            "DISCONNECTING" -> MaterialTheme.colorScheme.onSecondary
+            else -> MaterialTheme.colorScheme.onSurfaceVariant
+        }
     }
+
+    val pulseInfiniteTransition = rememberInfiniteTransition(label = "ConnectingPulse")
+    val pulseScale by pulseInfiniteTransition.animateFloat(
+        initialValue = 0.98f,
+        targetValue = 1.06f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "PulseScale"
+    )
 
     val scaleFactor by transition.animateFloat(
         label = "ButtonScale",
         transitionSpec = { spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow) }
     ) { s ->
-        if (s == "CONNECTED") 1.05f else 1.0f
+        if (s == "CONNECTED") 1.06f else 1.0f
     }
+
+    val finalScale = if (state == "CONNECTING") pulseScale else scaleFactor
 
     var downloadSpeed by remember { mutableStateOf("0.0 KB/s") }
     var uploadSpeed by remember { mutableStateOf("0.0 KB/s") }
     var pingTime by remember { mutableStateOf("0 ms") }
     
-    LaunchedEffect(state) {
+    LaunchedEffect(state, delayTestUrl) {
         if (state == "CONNECTED") {
-            pingTime = "${(35..65).random()} ms"
+            launch(Dispatchers.IO) {
+                while (true) {
+                    val startTime = System.currentTimeMillis()
+                    var connection: java.net.HttpURLConnection? = null
+                    val ping = try {
+                        val url = java.net.URL(delayTestUrl)
+                        connection = url.openConnection() as java.net.HttpURLConnection
+                        connection.connectTimeout = 3000
+                        connection.readTimeout = 3000
+                        connection.requestMethod = "GET"
+                        connection.useCaches = false
+                        connection.instanceFollowRedirects = false
+                        val responseCode = connection.responseCode
+                        val elapsed = System.currentTimeMillis() - startTime
+                        "${elapsed} ms"
+                    } catch (e: Exception) {
+                        "Timeout"
+                    } finally {
+                        connection?.disconnect()
+                    }
+                    
+                    kotlinx.coroutines.withContext(Dispatchers.Main) {
+                        pingTime = ping
+                    }
+                    kotlinx.coroutines.delay(10000)
+                }
+            }
             
             var lastRx = android.net.TrafficStats.getTotalRxBytes()
             var lastTx = android.net.TrafficStats.getTotalTxBytes()
@@ -4142,8 +4251,8 @@ fun ConnectionDashboard(
                     modifier = Modifier
                         .size(116.dp)
                         .graphicsLayer {
-                            scaleX = scaleFactor
-                            scaleY = scaleFactor
+                            scaleX = finalScale
+                            scaleY = finalScale
                         }
                         .pressScaleEffect()
                         .clip(CircleShape)

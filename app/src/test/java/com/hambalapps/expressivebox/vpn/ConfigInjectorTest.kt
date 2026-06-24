@@ -28,4 +28,55 @@ class ConfigInjectorTest {
         println("Generated Configuration:")
         println(configStr)
     }
+
+    @Test
+    fun testAiBypassConfigInjection() {
+        val mockContext = Mockito.mock(Context::class.java)
+        Mockito.`when`(mockContext.cacheDir).thenReturn(File(System.getProperty("java.io.tmpdir")))
+
+        val rawUri = "vless://463e7702-e5e0-4ab4-a84c-392f4927ce77@zone.nl.netlume.ir:29757?encryption=none&security=reality&type=tcp&headerType=http&path=%2Fassets&host=telewebion.ir&sni=telewebion.ir&fp=chrome&pbk=t_9lyts8KkYowHc3eDr22L7DuzRUnjRnodNhd1lspAE&sid=462333e748f7577e#test"
+        val settings = InjectorSettings(
+            bypassIran = true,
+            secureDns = "1.1.1.1",
+            tunStack = "system",
+            enableFragment = false,
+            fragmentLength = "10-20",
+            fragmentInterval = "10-20",
+            enableMux = true,
+            bypassLan = true,
+            vpnMode = "ai_bypass",
+            warpPrivateKey = "privatekeybase64",
+            warpPublicKey = "publickeybase64",
+            warpIpAddress = "172.16.0.2/32",
+            warpClientId = "6hHy"
+        )
+
+        val configStr = ConfigInjector.injectConfig(mockContext, rawUri, settings)
+        println("Generated AI Bypass Configuration:")
+        println(configStr)
+
+        val json = org.json.JSONObject(configStr)
+        val endpoints = json.getJSONArray("endpoints")
+        assert(endpoints.length() == 1)
+        val endpoint = endpoints.getJSONObject(0)
+        assert(endpoint.getString("type") == "wireguard")
+        assert(endpoint.getString("tag") == "warp-out")
+        assert(endpoint.getString("address") == "172.16.0.2/32")
+        assert(endpoint.getString("private_key") == "privatekeybase64")
+        assert(endpoint.getString("detour") == "proxy")
+
+        val peers = endpoint.getJSONArray("peers")
+        assert(peers.length() == 1)
+        val peer = peers.getJSONObject(0)
+        val peerAddress = peer.getString("address")
+        assert(peerAddress == "162.159.192.1" || peerAddress.matches(Regex("""^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$""")))
+        assert(peer.getInt("port") == 2408)
+        assert(peer.getString("reserved") == "6hHy")
+
+        val outbounds = json.getJSONArray("outbounds")
+        for (i in 0 until outbounds.length()) {
+            val out = outbounds.getJSONObject(i)
+            assert(out.getString("tag") != "warp-out")
+        }
+    }
 }

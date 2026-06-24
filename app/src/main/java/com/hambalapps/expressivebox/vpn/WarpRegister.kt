@@ -12,7 +12,8 @@ import java.security.KeyPairGenerator
 data class WarpCredentials(
     val privateKey: String,
     val publicKey: String,
-    val ipAddress: String
+    val ipAddress: String,
+    val clientId: String
 )
 
 suspend fun registerWarpAccount(): WarpCredentials? = withContext(Dispatchers.IO) {
@@ -69,6 +70,7 @@ suspend fun registerWarpAccount(): WarpCredentials? = withContext(Dispatchers.IO
             val responseJson = JSONObject(responseText)
             
             val config = responseJson.getJSONObject("config")
+            val clientId = config.optString("client_id", "")
             val interfaceObj = config.getJSONObject("interface")
             val addresses = interfaceObj.getJSONObject("addresses")
             val v4Address = addresses.optString("v4", "")
@@ -78,7 +80,8 @@ suspend fun registerWarpAccount(): WarpCredentials? = withContext(Dispatchers.IO
             WarpCredentials(
                 privateKey = privateKeyBase64,
                 publicKey = publicKeyBase64,
-                ipAddress = finalIp
+                ipAddress = finalIp,
+                clientId = clientId
             )
         } else {
             null

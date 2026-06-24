@@ -22,6 +22,7 @@ data class InjectorSettings(
     val warpPrivateKey: String = "",
     val warpPublicKey: String = "",
     val warpIpAddress: String = "",
+    val warpClientId: String = "",
     val vpnModeTunnelGames: Boolean = false
 )
 
@@ -37,8 +38,10 @@ object ConfigInjector {
     )
 
     private val aiBypassDomains = listOf(
-        "gemini.google.com", "generativelanguage.googleapis.com", "ai.google.dev", "makersuite.google.com",
-        "openai.com", "chatgpt.com", "chat.openai.com", "oaistatic.com", "oaiusercontent.com",
+        "google.com", "googleapis.com", "gstatic.com", "googleusercontent.com", "google.dev", "google.co", "google",
+        "ggpht.com", "ytimg.com", "youtube.com", "doubleclick.net", "google-analytics.com", "googletagmanager.com",
+        "g.co", "recaptcha.net",
+        "openai.com", "chatgpt.com", "oaistatic.com", "oaiusercontent.com",
         "anthropic.com", "claude.ai",
         "netflix.com", "netflix.net", "nflximg.net", "nflxvideo.net", "nflxso.net", "nflxext.com"
     )
@@ -92,6 +95,9 @@ object ConfigInjector {
 
             // 5. Inject direct/block outbounds
             injectOutbounds(configJson, settings)
+
+            // 6. Inject endpoints (for sing-box 1.11+ WireGuard)
+            injectEndpoints(context, configJson, settings)
 
             return configJson.toString(2)
         } catch (e: Exception) {
@@ -201,6 +207,7 @@ object ConfigInjector {
     private fun injectDns(context: Context, config: JSONObject, settings: InjectorSettings) {
         val dns = JSONObject()
         dns.put("reverse_mapping", true)
+        dns.put("strategy", "ipv4_only")
         val servers = JSONArray()
 
         // 1. Secure DNS Server (routes via the proxy)
@@ -545,27 +552,6 @@ object ConfigInjector {
             })
         }
 
-        // Inject Cloudflare WARP WireGuard outbound for AI Bypass Mode
-        if (settings.vpnMode == "ai_bypass" && settings.warpPrivateKey.isNotEmpty()) {
-            val warpOutbound = JSONObject().apply {
-                put("type", "wireguard")
-                put("tag", "warp-out")
-                put("server", "engage.cloudflareclient.com")
-                put("server_port", 2408)
-                
-                val localAddresses = JSONArray().apply {
-                    put(settings.warpIpAddress.ifEmpty { "172.16.0.2/32" })
-                    put("fd00::5/128")
-                }
-                put("local_address", localAddresses)
-                put("private_key", settings.warpPrivateKey)
-                put("peer_public_key", "bmXOC+F1fxEMDXGggWMuGcIy77Dd1KAD4kURmMyd378=")
-                // Chain it over the active proxy outbound!
-                put("dialer", "proxy")
-            }
-            cleanOutbounds.put(warpOutbound)
-        }
-
         config.put("outbounds", cleanOutbounds)
     }
 
@@ -584,6 +570,62 @@ object ConfigInjector {
             "${interval}ms"
         }
         tls.put("fragment_fallback_delay", delayStr)
+    }
+
+    private fun injectEndpoints(context: Context, config: JSONObject, settings: InjectorSettings) {
+        val endpoints = config.optJSONArray("endpoints") ?: JSONArray()
+        val cleanEndpoints = JSONArray()
+        
+        for (i in 0 until endpoints.length()) {
+            val ep = endpoints.optJSONObject(i) ?: continue
+            if (ep.optString("tag") != "warp-out") {
+                cleanEndpoints.put(ep)
+            }
+        }
+        
+        if (settings.vpnMode == "ai_bypass" && settings.warpPrivateKey.isNotEmpty()) {
+            val warpEndpoint = JSONObject().apply {
+                put("type", "wireguard")
+                put("tag", "warp-out")
+                
+                val rawIp = settings.warpIpAddress.trim()
+                val formattedIp = if (rawIp.isEmpty()) {
+                    "172.16.0.2/32"
+                } else if (rawIp.contains("/")) {
+                    rawIp
+                } else {
+                    "$rawIp/32"
+                }
+                put("address", formattedIp)
+                put("private_key", settings.warpPrivateKey)
+                
+                // Pre-resolve engage.cloudflareclient.com to raw IP to prevent startup resolution timeout/crashes
+                val peerAddress = resolveDomainWithFallbacks(context, "engage.cloudflareclient.com", settings) ?: "162.159.192.1"
+                android.util.Log.i("ExpressiveBox", "WARP endpoint peer engage.cloudflareclient.com pre-resolved to: $peerAddress")
+
+                val peerObj = JSONObject().apply {
+                    put("address", peerAddress)
+                    put("port", 2408)
+                    put("public_key", "bmXOC+F1fxEMDXGggWMuGcIy77Dd1KAD4kURmMyd378=")
+                    put("allowed_ips", JSONArray().apply { put("0.0.0.0/0") })
+                    if (settings.warpClientId.isNotEmpty()) {
+                        put("reserved", settings.warpClientId)
+                    }
+                }
+                val peersArr = JSONArray().apply {
+                    put(peerObj)
+                }
+                put("peers", peersArr)
+                put("detour", "proxy")
+            }
+            cleanEndpoints.put(warpEndpoint)
+        }
+        
+        if (cleanEndpoints.length() > 0) {
+            config.put("endpoints", cleanEndpoints)
+        } else {
+            config.remove("endpoints")
+        }
     }
 
     private fun buildDefaultSkeleton(settings: InjectorSettings): JSONObject {

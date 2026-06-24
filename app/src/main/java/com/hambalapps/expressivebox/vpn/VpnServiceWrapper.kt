@@ -441,9 +441,31 @@ class VpnServiceWrapper : VpnService(), PlatformInterface, CommandServerHandler 
                 val enableMuxVal = settingsManager.enableMux.first()
                 val bypassLanVal = settingsManager.bypassLan.first()
                 val vpnModeVal = settingsManager.vpnMode.first()
-                val warpPrivateKeyVal = settingsManager.warpPrivateKey.first()
-                val warpPublicKeyVal = settingsManager.warpPublicKey.first()
-                val warpIpAddressVal = settingsManager.warpIpAddress.first()
+                var warpPrivateKeyVal = settingsManager.warpPrivateKey.first()
+                var warpPublicKeyVal = settingsManager.warpPublicKey.first()
+                var warpIpAddressVal = settingsManager.warpIpAddress.first()
+                var warpClientIdVal = settingsManager.warpClientId.first()
+
+                if (vpnModeVal == "ai_bypass" && warpPrivateKeyVal.isNotEmpty() && warpClientIdVal.isEmpty()) {
+                    log("Upgrading WARP credentials to retrieve Client ID (Reserved Bytes)...")
+                    val creds = registerWarpAccount()
+                    if (creds != null) {
+                        settingsManager.setWarpCredentials(
+                            creds.privateKey,
+                            creds.publicKey,
+                            creds.ipAddress,
+                            creds.clientId
+                        )
+                        warpPrivateKeyVal = creds.privateKey
+                        warpPublicKeyVal = creds.publicKey
+                        warpIpAddressVal = creds.ipAddress
+                        warpClientIdVal = creds.clientId
+                        log("WARP credentials upgraded successfully. Client ID: $warpClientIdVal")
+                    } else {
+                        log("Failed to auto-register WARP credentials for Client ID upgrade.")
+                    }
+                }
+
                 val vpnModeTunnelGamesVal = settingsManager.vpnModeTunnelGames.first()
                 splitTunnelingEnabledVal = settingsManager.splitTunnelingEnabled.first()
                 splitTunnelingModeVal = settingsManager.splitTunnelingMode.first()
@@ -462,6 +484,7 @@ class VpnServiceWrapper : VpnService(), PlatformInterface, CommandServerHandler 
                     warpPrivateKey = warpPrivateKeyVal,
                     warpPublicKey = warpPublicKeyVal,
                     warpIpAddress = warpIpAddressVal,
+                    warpClientId = warpClientIdVal,
                     vpnModeTunnelGames = vpnModeTunnelGamesVal
                 )
 

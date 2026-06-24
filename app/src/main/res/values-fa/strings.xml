@@ -181,5 +181,7 @@
     <string name="warp_failed">ثبت اکانت WARP ناموفق بود. اتصال را بررسی کنید.</string>
     <string name="tunnel_games_title">عبور بازی‌ها از VPN</string>
     <string name="tunnel_games_desc">هدایت ترافیک بازی‌ها از طریق سرور VPN. در صورت غیرفعال بودن، از اتصال مستقیم با دی‌ان‌اس گیم (الکترو/رادار) استفاده می‌شود.</string>
+    <string name="delay_test_url_title">آدرس تست تاخیر (Delay Test)</string>
+    <string name="delay_test_url_desc">آدرس مورد استفاده برای اندازه‌گیری تاخیر واقعی اتصال</string>
 </resources>
 

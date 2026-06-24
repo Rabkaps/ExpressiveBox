@@ -181,4 +181,6 @@
     <string name="warp_failed">WARP Registration failed. Check connection.</string>
     <string name="tunnel_games_title">Tunnel Games through VPN</string>
     <string name="tunnel_games_desc">Route games via VPN proxy. Turn off for direct low-latency DNS (Electro/Radar).</string>
+    <string name="delay_test_url_title">Delay Test URL</string>
+    <string name="delay_test_url_desc">URL used for measuring real connection delay</string>
 </resources>

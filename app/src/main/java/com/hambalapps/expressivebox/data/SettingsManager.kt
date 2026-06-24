@@ -44,7 +44,9 @@ class SettingsManager(private val context: Context) {
         val WARP_PRIVATE_KEY = stringPreferencesKey("warp_private_key")
         val WARP_PUBLIC_KEY = stringPreferencesKey("warp_public_key")
         val WARP_IP_ADDRESS = stringPreferencesKey("warp_ip_address")
+        val WARP_CLIENT_ID = stringPreferencesKey("warp_client_id")
         val VPN_MODE_TUNNEL_GAMES = booleanPreferencesKey("vpn_mode_tunnel_games")
+        val DELAY_TEST_URL = stringPreferencesKey("delay_test_url")
         
         private val defaultThemeKey = if (Config.IS_SPECIAL) "cherry_blossom" else "dynamic"
 
@@ -80,7 +82,9 @@ class SettingsManager(private val context: Context) {
             warpPrivateKey = "",
             warpPublicKey = "",
             warpIpAddress = "",
+            warpClientId = "",
             vpnModeTunnelGames = false,
+            delayTestUrl = "http://cp.cloudflare.com/generate_204",
             deserializedSubscriptions = emptyList()
         )
     }
@@ -140,7 +144,9 @@ class SettingsManager(private val context: Context) {
             warpPrivateKey = prefs[WARP_PRIVATE_KEY] ?: "",
             warpPublicKey = prefs[WARP_PUBLIC_KEY] ?: "",
             warpIpAddress = prefs[WARP_IP_ADDRESS] ?: "",
+            warpClientId = prefs[WARP_CLIENT_ID] ?: "",
             vpnModeTunnelGames = prefs[VPN_MODE_TUNNEL_GAMES] ?: false,
+            delayTestUrl = prefs[DELAY_TEST_URL] ?: "http://cp.cloudflare.com/generate_204",
             deserializedSubscriptions = deserialized
         )
     }.distinctUntilChanged()
@@ -174,7 +180,9 @@ class SettingsManager(private val context: Context) {
     val warpPrivateKey: Flow<String> = context.dataStore.data.map { it[WARP_PRIVATE_KEY] ?: "" }.distinctUntilChanged()
     val warpPublicKey: Flow<String> = context.dataStore.data.map { it[WARP_PUBLIC_KEY] ?: "" }.distinctUntilChanged()
     val warpIpAddress: Flow<String> = context.dataStore.data.map { it[WARP_IP_ADDRESS] ?: "" }.distinctUntilChanged()
+    val warpClientId: Flow<String> = context.dataStore.data.map { it[WARP_CLIENT_ID] ?: "" }.distinctUntilChanged()
     val vpnModeTunnelGames: Flow<Boolean> = context.dataStore.data.map { it[VPN_MODE_TUNNEL_GAMES] ?: false }.distinctUntilChanged()
+    val delayTestUrl: Flow<String> = context.dataStore.data.map { it[DELAY_TEST_URL] ?: "http://cp.cloudflare.com/generate_204" }.distinctUntilChanged()
 
     suspend fun setAdvancedMode(value: Boolean) { context.dataStore.edit { it[IS_ADVANCED_MODE] = value } }
     suspend fun setBypassIran(value: Boolean) { context.dataStore.edit { it[BYPASS_IRAN] = value } }
@@ -203,14 +211,16 @@ class SettingsManager(private val context: Context) {
     suspend fun setLastSubsUpdateTime(value: Long) { context.dataStore.edit { it[LAST_SUBS_UPDATE_TIME] = value } }
     suspend fun setShowLogsTab(value: Boolean) { context.dataStore.edit { it[SHOW_LOGS_TAB] = value } }
     suspend fun setVpnMode(value: String) { context.dataStore.edit { it[VPN_MODE] = value } }
-    suspend fun setWarpCredentials(privateKey: String, publicKey: String, ipAddress: String) {
+    suspend fun setWarpCredentials(privateKey: String, publicKey: String, ipAddress: String, clientId: String) {
         context.dataStore.edit { prefs ->
             prefs[WARP_PRIVATE_KEY] = privateKey
             prefs[WARP_PUBLIC_KEY] = publicKey
             prefs[WARP_IP_ADDRESS] = ipAddress
+            prefs[WARP_CLIENT_ID] = clientId
         }
     }
     suspend fun setVpnModeTunnelGames(value: Boolean) { context.dataStore.edit { it[VPN_MODE_TUNNEL_GAMES] = value } }
+    suspend fun setDelayTestUrl(value: String) { context.dataStore.edit { it[DELAY_TEST_URL] = value } }
 
     val autoConnectSubs: Flow<Set<String>> = context.dataStore.data.map { it[AUTO_CONNECT_SUBS] ?: emptySet() }.distinctUntilChanged()
 
@@ -258,7 +268,9 @@ data class UserSettings(
     val warpPrivateKey: String,
     val warpPublicKey: String,
     val warpIpAddress: String,
+    val warpClientId: String,
     val vpnModeTunnelGames: Boolean,
+    val delayTestUrl: String,
     val deserializedSubscriptions: List<Subscription>
 )
 
