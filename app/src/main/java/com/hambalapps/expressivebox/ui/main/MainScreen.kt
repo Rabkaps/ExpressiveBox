@@ -251,13 +251,7 @@ fun MainScreen(
         }
     }
 
-    // Auto-select dedicated server on launch if active profile is empty (Special flavor only)
-    LaunchedEffect(activeProfile) {
-        if (Config.IS_SPECIAL && activeProfile.isEmpty() && Config.DEFAULT_PROFILE.isNotEmpty()) {
-            settingsManager.setActiveProfile(Config.DEFAULT_PROFILE)
-            settingsManager.setActiveSubId("special_default")
-        }
-    }
+    // Dedicated server auto-select removed
 
     // Observe VPN state and logs
     val vpnState by VpnServiceWrapper.vpnState.collectAsStateWithLifecycle()
@@ -383,10 +377,12 @@ fun MainScreen(
     val surfaceContainer = MaterialTheme.colorScheme.surfaceContainer
     val surfaceContainerLow = MaterialTheme.colorScheme.surfaceContainerLow
     val primaryContainer = MaterialTheme.colorScheme.primaryContainer
+    val secondaryContainer = MaterialTheme.colorScheme.secondaryContainer
+    val tertiaryContainer = MaterialTheme.colorScheme.tertiaryContainer
     val outlineVariant = MaterialTheme.colorScheme.outlineVariant
 
     val cardBorderBrush = remember(isDark, cardStyle, primaryColor, secondaryColor, outlineVariant) {
-        if (cardStyle == "solid") {
+        if (cardStyle == "solid" || cardStyle == "pastel") {
             SolidColor(outlineVariant)
         } else {
             val colors = listOf(
@@ -398,7 +394,7 @@ fun MainScreen(
     }
 
     val primaryCardBrush = remember(isDark, cardStyle, primaryColor, secondaryColor, surfaceContainerHigh) {
-        if (cardStyle == "solid") {
+        if (cardStyle == "solid" || cardStyle == "pastel") {
             SolidColor(surfaceContainerHigh)
         } else {
             val colors = if (isDark) {
@@ -416,9 +412,11 @@ fun MainScreen(
         }
     }
 
-    val secondaryCardBrush = remember(isDark, cardStyle, secondaryColor, tertiaryColor, surfaceContainer) {
+    val secondaryCardBrush = remember(isDark, cardStyle, secondaryColor, tertiaryColor, surfaceContainer, secondaryContainer) {
         if (cardStyle == "solid") {
             SolidColor(surfaceContainer)
+        } else if (cardStyle == "pastel") {
+            SolidColor(secondaryContainer)
         } else {
             val colors = if (isDark) {
                 listOf(
@@ -435,9 +433,11 @@ fun MainScreen(
         }
     }
 
-    val tertiaryCardBrush = remember(isDark, cardStyle, tertiaryColor, primaryColor, surfaceContainerLow) {
+    val tertiaryCardBrush = remember(isDark, cardStyle, tertiaryColor, primaryColor, surfaceContainerLow, tertiaryContainer) {
         if (cardStyle == "solid") {
             SolidColor(surfaceContainerLow)
+        } else if (cardStyle == "pastel") {
+            SolidColor(tertiaryContainer)
         } else {
             val colors = if (isDark) {
                 listOf(
@@ -469,6 +469,12 @@ fun MainScreen(
     val activeCardBackgroundBrush = remember(isDark, cardStyle, primaryColor, secondaryColor, tertiaryColor, primaryContainer, flowOffset) {
         if (cardStyle == "solid") {
             SolidColor(primaryContainer)
+        } else if (cardStyle == "pastel") {
+            Brush.linearGradient(
+                colors = listOf(primaryColor, primaryContainer),
+                start = Offset(flowOffset - 500f, 0f),
+                end = Offset(flowOffset + 500f, 1000f)
+            )
         } else {
             val colors = if (isDark) {
                 listOf(
@@ -798,11 +804,11 @@ fun MainScreen(
                                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
                                         val modes = listOf(
-                                            "standard" to stringResource(R.string.mode_standard),
-                                            "gaming" to stringResource(R.string.mode_gaming),
-                                            "ai_bypass" to stringResource(R.string.mode_ai_bypass)
+                                            Triple("standard", R.string.mode_standard_title, R.string.tag_stable),
+                                            Triple("gaming", R.string.mode_gaming_title, R.string.tag_experimental),
+                                            Triple("ai_bypass", R.string.mode_ai_bypass_title, R.string.tag_experimental)
                                         )
-                                        modes.forEach { (modeKey, modeName) ->
+                                        modes.forEach { (modeKey, titleResId, tagResId) ->
                                             val isSelected = vpnMode == modeKey
                                             Box(
                                                 modifier = Modifier
@@ -865,15 +871,30 @@ fun MainScreen(
                                                     .padding(vertical = 10.dp, horizontal = 4.dp),
                                                 contentAlignment = Alignment.Center
                                             ) {
-                                                Text(
-                                                    text = modeName,
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimary
-                                                            else MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis
-                                                )
+                                                Column(
+                                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                                    verticalArrangement = Arrangement.Center
+                                                ) {
+                                                    Text(
+                                                        text = stringResource(titleResId),
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                                        color = if (isSelected) MaterialTheme.colorScheme.onPrimary
+                                                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                    Spacer(modifier = Modifier.height(2.dp))
+                                                    Text(
+                                                        text = stringResource(tagResId),
+                                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = MaterialTheme.typography.labelSmall.fontSize * 0.8f),
+                                                        fontWeight = FontWeight.Normal,
+                                                        color = if (isSelected) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
+                                                                else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                }
                                             }
                                         }
                                     }
@@ -2986,7 +3007,8 @@ fun MainScreen(
                                         ) {
                                             listOf(
                                                 "glass" to R.string.style_glass,
-                                                "solid" to R.string.style_solid
+                                                "solid" to R.string.style_solid,
+                                                "pastel" to R.string.style_pastel
                                             ).forEach { (styleKey, stringId) ->
                                                 FilterChip(
                                                     selected = cardStyle == styleKey,
@@ -4284,7 +4306,7 @@ fun ConnectionDashboard(
     val primaryContainer = MaterialTheme.colorScheme.primaryContainer
 
     val cardBorderBrush = remember(isDark, cardStyle, primaryColor, secondaryColor, outlineVariant) {
-        if (cardStyle == "solid") {
+        if (cardStyle == "solid" || cardStyle == "pastel") {
             SolidColor(outlineVariant)
         } else {
             val colors = listOf(
@@ -4296,7 +4318,7 @@ fun ConnectionDashboard(
     }
 
     val primaryCardBrush = remember(isDark, cardStyle, primaryColor, secondaryColor, surfaceContainerHigh) {
-        if (cardStyle == "solid") {
+        if (cardStyle == "solid" || cardStyle == "pastel") {
             SolidColor(surfaceContainerHigh)
         } else {
             val colors = if (isDark) {
@@ -4328,6 +4350,12 @@ fun ConnectionDashboard(
     val activeCardBackgroundBrush = remember(isDark, cardStyle, primaryColor, secondaryColor, tertiaryColor, primaryContainer, flowOffset) {
         if (cardStyle == "solid") {
             SolidColor(primaryContainer)
+        } else if (cardStyle == "pastel") {
+            Brush.linearGradient(
+                colors = listOf(primaryColor, primaryContainer),
+                start = Offset(flowOffset - 500f, 0f),
+                end = Offset(flowOffset + 500f, 1000f)
+            )
         } else {
             val colors = if (isDark) {
                 listOf(
@@ -5193,9 +5221,10 @@ private fun LogsConsole(
 
     val outlineVariant = MaterialTheme.colorScheme.outlineVariant
     val surfaceContainerLow = MaterialTheme.colorScheme.surfaceContainerLow
+    val tertiaryContainer = MaterialTheme.colorScheme.tertiaryContainer
 
     val cardBorderBrush = remember(isDark, cardStyle, primaryColor, secondaryColor, outlineVariant) {
-        if (cardStyle == "solid") {
+        if (cardStyle == "solid" || cardStyle == "pastel") {
             SolidColor(outlineVariant)
         } else {
             val colors = listOf(
@@ -5206,9 +5235,11 @@ private fun LogsConsole(
         }
     }
 
-    val tertiaryCardBrush = remember(isDark, cardStyle, tertiaryColor, primaryColor, surfaceContainerLow) {
+    val tertiaryCardBrush = remember(isDark, cardStyle, tertiaryColor, primaryColor, surfaceContainerLow, tertiaryContainer) {
         if (cardStyle == "solid") {
             SolidColor(surfaceContainerLow)
+        } else if (cardStyle == "pastel") {
+            SolidColor(tertiaryContainer)
         } else {
             val colors = if (isDark) {
                 listOf(

@@ -171,6 +171,7 @@
     <string name="style_desc">انتخاب بین طراحی شیشه‌ای یا تخت و پررنگ</string>
     <string name="style_glass">شیشه‌ای</string>
     <string name="style_solid">پررنگ و تخت</string>
+    <string name="style_pastel">رنگ‌های پاستلی</string>
     <string name="show_logs_tab">نمایش تب لاگ‌ها</string>
     <string name="show_logs_tab_desc">نمایش یا پنهان کردن تب لاگ‌های سیستم در منوی پایین</string>
     <string name="vpn_mode_title">حالت اتصال VPN</string>
@@ -187,5 +188,10 @@
     <string name="warp_detour_desc">پروکسی: هدایت ترافیک Warp از داخل پروکسی فعال شما (نیازمند پشتیبانی پروکسی از UDP). مستقیم: اتصال مستقیم به Warp (بدون عبور از پروکسی).</string>
     <string name="warp_port_title">پورت WARP</string>
     <string name="warp_port_desc">پورت UDP برای اتصال به Cloudflare WARP را انتخاب کنید. مقدار پیش‌فرض ۲۴۰۸ است.</string>
+    <string name="mode_standard_title">معمولی</string>
+    <string name="mode_gaming_title">حالت بازی</string>
+    <string name="mode_ai_bypass_title">دور زدن تحریم</string>
+    <string name="tag_stable">پایدار</string>
+    <string name="tag_experimental">آزمایشی</string>
 </resources>
 

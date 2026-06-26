@@ -171,6 +171,7 @@
     <string name="style_desc">Choose between glass or flat solid design</string>
     <string name="style_glass">Glassmorphic</string>
     <string name="style_solid">Solid Expressive</string>
+    <string name="style_pastel">Pastel Solid</string>
     <string name="show_logs_tab">Show Logs Tab</string>
     <string name="show_logs_tab_desc">Display engine logs tab in bottom navigation bar</string>
     <string name="vpn_mode_title">VPN Mode</string>
@@ -187,4 +188,9 @@
     <string name="warp_detour_desc">Proxy: Tunnel WARP via active proxy (requires UDP proxy support). Direct: Connect to WARP directly (bypasses proxy).</string>
     <string name="warp_port_title">WARP Port</string>
     <string name="warp_port_desc">Select UDP port to connect to Cloudflare WARP. Default is 2408.</string>
+    <string name="mode_standard_title">Standard</string>
+    <string name="mode_gaming_title">Gaming Mode</string>
+    <string name="mode_ai_bypass_title">AI Bypass</string>
+    <string name="tag_stable">Stable</string>
+    <string name="tag_experimental">Experimental</string>
 </resources>

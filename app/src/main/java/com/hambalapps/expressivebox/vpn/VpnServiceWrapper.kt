@@ -385,8 +385,6 @@ class VpnServiceWrapper : VpnService(), PlatformInterface, CommandServerHandler 
                         ?: if (activeSubId == "manual") {
                             val manualStr = settingsManager.manualServers.first()
                             Subscription(id = "manual", name = "Manual", url = "local://manual", servers = manualStr)
-                        } else if (activeSubId == "special_default") {
-                            Subscription(id = "special_default", name = "Dedicated", url = "local://special_default", servers = Config.DEFAULT_PROFILE)
                         } else null
                     
                     val servers = activeSub?.servers?.split("\n")?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()

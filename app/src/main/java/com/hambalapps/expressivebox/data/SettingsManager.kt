@@ -99,14 +99,6 @@ class SettingsManager(private val context: Context) {
         
         // Parse subscriptions in the background thread (flow mapping runs on the DataStore IO dispatcher)
         val deserialized = deserializeSubscriptions(listStr).toMutableList()
-        if (Config.IS_SPECIAL && Config.DEFAULT_PROFILE.isNotEmpty()) {
-            deserialized.add(0, Subscription(
-                id = "special_default",
-                name = "Dedicated Server ❤️",
-                url = "local://special_default",
-                servers = Config.DEFAULT_PROFILE
-            ))
-        }
         if (manualStr.isNotEmpty()) {
             deserialized.add(Subscription(
                 id = "manual",
