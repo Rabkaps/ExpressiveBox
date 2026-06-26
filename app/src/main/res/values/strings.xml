@@ -183,4 +183,8 @@
     <string name="tunnel_games_desc">Route games via VPN proxy. Turn off for direct low-latency DNS (Electro/Radar).</string>
     <string name="delay_test_url_title">Delay Test URL</string>
     <string name="delay_test_url_desc">URL used for measuring real connection delay</string>
+    <string name="warp_detour_title">WARP Routing Detour</string>
+    <string name="warp_detour_desc">Proxy: Tunnel WARP via active proxy (requires UDP proxy support). Direct: Connect to WARP directly (bypasses proxy).</string>
+    <string name="warp_port_title">WARP Port</string>
+    <string name="warp_port_desc">Select UDP port to connect to Cloudflare WARP. Default is 2408.</string>
 </resources>

@@ -45,7 +45,9 @@ data class UserSettings(
     val autoConnectSubs: Set<String> = emptySet(),
     val isFarsi: Boolean = false,
     val enableTun: Boolean = false,
-    val delayTestUrl: String = "http://cp.cloudflare.com/generate_204"
+    val delayTestUrl: String = "http://cp.cloudflare.com/generate_204",
+    val warpDetourMode: String = "proxy",
+    val warpPort: String = "2408"
 ) {
     val deserializedSubscriptions: List<Subscription>
         get() {
@@ -149,6 +151,8 @@ class SettingsManager {
     fun setIsFarsi(value: Boolean) { saveSettings(currentSettings.copy(isFarsi = value)) }
     fun setEnableTun(value: Boolean) { saveSettings(currentSettings.copy(enableTun = value)) }
     fun setDelayTestUrl(value: String) { saveSettings(currentSettings.copy(delayTestUrl = value)) }
+    fun setWarpDetourMode(value: String) { saveSettings(currentSettings.copy(warpDetourMode = value)) }
+    fun setWarpPort(value: String) { saveSettings(currentSettings.copy(warpPort = value)) }
 
     fun toggleAutoConnectSub(subId: String) {
         val current = currentSettings.autoConnectSubs

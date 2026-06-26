@@ -467,6 +467,8 @@ class VpnServiceWrapper : VpnService(), PlatformInterface, CommandServerHandler 
                 }
 
                 val vpnModeTunnelGamesVal = settingsManager.vpnModeTunnelGames.first()
+                val warpDetourModeVal = settingsManager.warpDetourMode.first()
+                val warpPortVal = settingsManager.warpPort.first()
                 splitTunnelingEnabledVal = settingsManager.splitTunnelingEnabled.first()
                 splitTunnelingModeVal = settingsManager.splitTunnelingMode.first()
                 splitTunnelingAppsVal = settingsManager.splitTunnelingApps.first()
@@ -485,7 +487,9 @@ class VpnServiceWrapper : VpnService(), PlatformInterface, CommandServerHandler 
                     warpPublicKey = warpPublicKeyVal,
                     warpIpAddress = warpIpAddressVal,
                     warpClientId = warpClientIdVal,
-                    vpnModeTunnelGames = vpnModeTunnelGamesVal
+                    vpnModeTunnelGames = vpnModeTunnelGamesVal,
+                    warpDetourMode = warpDetourModeVal,
+                    warpPort = warpPortVal
                 )
 
                 // Inject our custom bypass-Iran rules, split DNS, and advanced parameters

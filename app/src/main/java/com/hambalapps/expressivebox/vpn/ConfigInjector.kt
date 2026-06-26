@@ -23,7 +23,9 @@ data class InjectorSettings(
     val warpPublicKey: String = "",
     val warpIpAddress: String = "",
     val warpClientId: String = "",
-    val vpnModeTunnelGames: Boolean = false
+    val vpnModeTunnelGames: Boolean = false,
+    val warpDetourMode: String = "proxy",
+    val warpPort: String = "2408"
 )
 
 object ConfigInjector {
@@ -605,7 +607,7 @@ object ConfigInjector {
 
                 val peerObj = JSONObject().apply {
                     put("address", peerAddress)
-                    put("port", 2408)
+                    put("port", settings.warpPort.toIntOrNull() ?: 2408)
                     put("public_key", "bmXOC+F1fxEMDXGggWMuGcIy77Dd1KAD4kURmMyd378=")
                     put("allowed_ips", JSONArray().apply { put("0.0.0.0/0") })
                     if (settings.warpClientId.isNotEmpty()) {
@@ -616,7 +618,7 @@ object ConfigInjector {
                     put(peerObj)
                 }
                 put("peers", peersArr)
-                put("detour", "proxy")
+                put("detour", settings.warpDetourMode)
             }
             cleanEndpoints.put(warpEndpoint)
         }

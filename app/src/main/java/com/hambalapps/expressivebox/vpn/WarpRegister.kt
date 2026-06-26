@@ -38,8 +38,8 @@ suspend fun registerWarpAccount(): WarpCredentials? = withContext(Dispatchers.IO
             publicEncoded
         }
         
-        val privateKeyBase64 = Base64.encodeToString(privateKeyRaw, Base64.NO_WRAP).trim()
-        val publicKeyBase64 = Base64.encodeToString(publicKeyRaw, Base64.NO_WRAP).trim()
+        val privateKeyBase64 = Base64Compat.encodeToString(privateKeyRaw)
+        val publicKeyBase64 = Base64Compat.encodeToString(publicKeyRaw)
         
         // 2. Register via Cloudflare API
         val url = URL("https://api.cloudflareclient.com/v0a1925/reg")
@@ -89,5 +89,20 @@ suspend fun registerWarpAccount(): WarpCredentials? = withContext(Dispatchers.IO
     } catch (e: Exception) {
         e.printStackTrace()
         null
+    }
+}
+
+object Base64Compat {
+    fun encodeToString(bytes: ByteArray): String {
+        return try {
+            val encoded = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+            if (encoded != null) {
+                encoded.trim()
+            } else {
+                java.util.Base64.getEncoder().encodeToString(bytes).replace("=", "").trim()
+            }
+        } catch (e: Throwable) {
+            java.util.Base64.getEncoder().encodeToString(bytes).replace("=", "").trim()
+        }
     }
 }

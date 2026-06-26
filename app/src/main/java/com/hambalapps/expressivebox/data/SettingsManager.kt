@@ -47,6 +47,8 @@ class SettingsManager(private val context: Context) {
         val WARP_CLIENT_ID = stringPreferencesKey("warp_client_id")
         val VPN_MODE_TUNNEL_GAMES = booleanPreferencesKey("vpn_mode_tunnel_games")
         val DELAY_TEST_URL = stringPreferencesKey("delay_test_url")
+        val WARP_DETOUR_MODE = stringPreferencesKey("warp_detour_mode")
+        val WARP_PORT = stringPreferencesKey("warp_port")
         
         private val defaultThemeKey = if (Config.IS_SPECIAL) "cherry_blossom" else "dynamic"
 
@@ -85,6 +87,8 @@ class SettingsManager(private val context: Context) {
             warpClientId = "",
             vpnModeTunnelGames = false,
             delayTestUrl = "http://cp.cloudflare.com/generate_204",
+            warpDetourMode = "proxy",
+            warpPort = "2408",
             deserializedSubscriptions = emptyList()
         )
     }
@@ -147,6 +151,8 @@ class SettingsManager(private val context: Context) {
             warpClientId = prefs[WARP_CLIENT_ID] ?: "",
             vpnModeTunnelGames = prefs[VPN_MODE_TUNNEL_GAMES] ?: false,
             delayTestUrl = prefs[DELAY_TEST_URL] ?: "http://cp.cloudflare.com/generate_204",
+            warpDetourMode = prefs[WARP_DETOUR_MODE] ?: "proxy",
+            warpPort = prefs[WARP_PORT] ?: "2408",
             deserializedSubscriptions = deserialized
         )
     }.distinctUntilChanged()
@@ -183,6 +189,8 @@ class SettingsManager(private val context: Context) {
     val warpClientId: Flow<String> = context.dataStore.data.map { it[WARP_CLIENT_ID] ?: "" }.distinctUntilChanged()
     val vpnModeTunnelGames: Flow<Boolean> = context.dataStore.data.map { it[VPN_MODE_TUNNEL_GAMES] ?: false }.distinctUntilChanged()
     val delayTestUrl: Flow<String> = context.dataStore.data.map { it[DELAY_TEST_URL] ?: "http://cp.cloudflare.com/generate_204" }.distinctUntilChanged()
+    val warpDetourMode: Flow<String> = context.dataStore.data.map { it[WARP_DETOUR_MODE] ?: "proxy" }.distinctUntilChanged()
+    val warpPort: Flow<String> = context.dataStore.data.map { it[WARP_PORT] ?: "2408" }.distinctUntilChanged()
 
     suspend fun setAdvancedMode(value: Boolean) { context.dataStore.edit { it[IS_ADVANCED_MODE] = value } }
     suspend fun setBypassIran(value: Boolean) { context.dataStore.edit { it[BYPASS_IRAN] = value } }
@@ -221,6 +229,8 @@ class SettingsManager(private val context: Context) {
     }
     suspend fun setVpnModeTunnelGames(value: Boolean) { context.dataStore.edit { it[VPN_MODE_TUNNEL_GAMES] = value } }
     suspend fun setDelayTestUrl(value: String) { context.dataStore.edit { it[DELAY_TEST_URL] = value } }
+    suspend fun setWarpDetourMode(value: String) { context.dataStore.edit { it[WARP_DETOUR_MODE] = value } }
+    suspend fun setWarpPort(value: String) { context.dataStore.edit { it[WARP_PORT] = value } }
 
     val autoConnectSubs: Flow<Set<String>> = context.dataStore.data.map { it[AUTO_CONNECT_SUBS] ?: emptySet() }.distinctUntilChanged()
 
@@ -271,6 +281,8 @@ data class UserSettings(
     val warpClientId: String,
     val vpnModeTunnelGames: Boolean,
     val delayTestUrl: String,
+    val warpDetourMode: String,
+    val warpPort: String,
     val deserializedSubscriptions: List<Subscription>
 )
 

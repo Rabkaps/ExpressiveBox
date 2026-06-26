@@ -148,6 +148,8 @@ fun MainScreen(
     val warpClientId = settings.warpClientId
     val vpnModeTunnelGames = settings.vpnModeTunnelGames
     val delayTestUrl = settings.delayTestUrl
+    val warpDetourMode = settings.warpDetourMode
+    val warpPort = settings.warpPort
 
     val subscriptions = settings.deserializedSubscriptions
     val activeSubscription = remember(subscriptions, activeSubId) {
@@ -915,6 +917,145 @@ fun MainScreen(
                                                         }
                                                     }
                                                 )
+                                            }
+                                        }
+                                    }
+
+                                    AnimatedVisibility(
+                                        visible = vpnMode == "ai_bypass",
+                                        enter = expandVertically() + fadeIn(),
+                                        exit = shrinkVertically() + fadeOut()
+                                    ) {
+                                        Column {
+                                            Spacer(modifier = Modifier.height(16.dp))
+                                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                            Spacer(modifier = Modifier.height(16.dp))
+                                            
+                                            // 1. WARP Detour Selection
+                                            Text(
+                                                text = stringResource(R.string.warp_detour_title),
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Text(
+                                                text = stringResource(R.string.warp_detour_desc),
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            Spacer(modifier = Modifier.height(10.dp))
+                                            
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                val detourOptions = listOf(
+                                                    "proxy" to "Proxy",
+                                                    "direct" to "Direct"
+                                                )
+                                                detourOptions.forEach { (optionKey, optionName) ->
+                                                    val isSelected = warpDetourMode == optionKey
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .weight(1f)
+                                                            .clip(ExpressiveChipShape)
+                                                            .background(
+                                                                if (isSelected) MaterialTheme.colorScheme.primary
+                                                                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                                            )
+                                                            .border(
+                                                                width = 1.dp,
+                                                                color = if (isSelected) MaterialTheme.colorScheme.primary
+                                                                        else MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
+                                                                shape = ExpressiveChipShape
+                                                            )
+                                                            .clickable {
+                                                                scope.launch {
+                                                                    settingsManager.setWarpDetourMode(optionKey)
+                                                                    if (vpnState == "CONNECTED") {
+                                                                        startVpnService(context)
+                                                                    }
+                                                                }
+                                                            }
+                                                            .pressScaleEffect()
+                                                            .padding(vertical = 10.dp, horizontal = 4.dp),
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        Text(
+                                                            text = optionName,
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                                            color = if (isSelected) MaterialTheme.colorScheme.onPrimary
+                                                                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                            maxLines = 1,
+                                                            overflow = TextOverflow.Ellipsis
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                            
+                                            Spacer(modifier = Modifier.height(20.dp))
+                                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                                            Spacer(modifier = Modifier.height(16.dp))
+                                            
+                                            // 2. WARP Port Selection
+                                            Text(
+                                                text = stringResource(R.string.warp_port_title),
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Text(
+                                                text = stringResource(R.string.warp_port_desc),
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            Spacer(modifier = Modifier.height(10.dp))
+                                            
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                val portOptions = listOf("2408", "500", "1701", "4500")
+                                                portOptions.forEach { portStr ->
+                                                    val isSelected = warpPort == portStr
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .weight(1f)
+                                                            .clip(ExpressiveChipShape)
+                                                            .background(
+                                                                if (isSelected) MaterialTheme.colorScheme.primary
+                                                                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                                            )
+                                                            .border(
+                                                                width = 1.dp,
+                                                                color = if (isSelected) MaterialTheme.colorScheme.primary
+                                                                        else MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
+                                                                shape = ExpressiveChipShape
+                                                            )
+                                                            .clickable {
+                                                                scope.launch {
+                                                                    settingsManager.setWarpPort(portStr)
+                                                                    if (vpnState == "CONNECTED") {
+                                                                        startVpnService(context)
+                                                                    }
+                                                                }
+                                                            }
+                                                            .pressScaleEffect()
+                                                            .padding(vertical = 10.dp, horizontal = 4.dp),
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        Text(
+                                                            text = portStr,
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                                            color = if (isSelected) MaterialTheme.colorScheme.onPrimary
+                                                                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                            maxLines = 1,
+                                                            overflow = TextOverflow.Ellipsis
+                                                        )
+                                                    }
+                                                }
                                             }
                                         }
                                     }

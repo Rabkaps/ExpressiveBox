@@ -183,5 +183,9 @@
     <string name="tunnel_games_desc">هدایت ترافیک بازی‌ها از طریق سرور VPN. در صورت غیرفعال بودن، از اتصال مستقیم با دی‌ان‌اس گیم (الکترو/رادار) استفاده می‌شود.</string>
     <string name="delay_test_url_title">آدرس تست تاخیر (Delay Test)</string>
     <string name="delay_test_url_desc">آدرس مورد استفاده برای اندازه‌گیری تاخیر واقعی اتصال</string>
+    <string name="warp_detour_title">مسیر هدایت ترافیک WARP</string>
+    <string name="warp_detour_desc">پروکسی: هدایت ترافیک Warp از داخل پروکسی فعال شما (نیازمند پشتیبانی پروکسی از UDP). مستقیم: اتصال مستقیم به Warp (بدون عبور از پروکسی).</string>
+    <string name="warp_port_title">پورت WARP</string>
+    <string name="warp_port_desc">پورت UDP برای اتصال به Cloudflare WARP را انتخاب کنید. مقدار پیش‌فرض ۲۴۰۸ است.</string>
 </resources>
 

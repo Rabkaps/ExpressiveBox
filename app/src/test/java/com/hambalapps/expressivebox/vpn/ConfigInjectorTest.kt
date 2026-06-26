@@ -4,6 +4,7 @@ import android.content.Context
 import org.junit.Test
 import org.mockito.Mockito
 import java.io.File
+import kotlinx.coroutines.runBlocking
 
 class ConfigInjectorTest {
     @Test
@@ -48,7 +49,9 @@ class ConfigInjectorTest {
             warpPrivateKey = "privatekeybase64",
             warpPublicKey = "publickeybase64",
             warpIpAddress = "172.16.0.2/32",
-            warpClientId = "6hHy"
+            warpClientId = "6hHy",
+            warpDetourMode = "direct",
+            warpPort = "4500"
         )
 
         val configStr = ConfigInjector.injectConfig(mockContext, rawUri, settings)
@@ -63,20 +66,34 @@ class ConfigInjectorTest {
         assert(endpoint.getString("tag") == "warp-out")
         assert(endpoint.getString("address") == "172.16.0.2/32")
         assert(endpoint.getString("private_key") == "privatekeybase64")
-        assert(endpoint.getString("detour") == "proxy")
+        assert(endpoint.getString("detour") == "direct")
 
         val peers = endpoint.getJSONArray("peers")
         assert(peers.length() == 1)
         val peer = peers.getJSONObject(0)
         val peerAddress = peer.getString("address")
         assert(peerAddress == "162.159.192.1" || peerAddress.matches(Regex("""^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$""")))
-        assert(peer.getInt("port") == 2408)
+        assert(peer.getInt("port") == 4500)
         assert(peer.getString("reserved") == "6hHy")
 
         val outbounds = json.getJSONArray("outbounds")
         for (i in 0 until outbounds.length()) {
             val out = outbounds.getJSONObject(i)
             assert(out.getString("tag") != "warp-out")
+        }
+    }
+
+    @Test
+    fun testWarpRegistrationResponse() {
+        runBlocking {
+            val creds = com.hambalapps.expressivebox.vpn.registerWarpAccount()
+            if (creds != null) {
+                val file = java.io.File("warp_response.json")
+                file.writeText("PrivateKey: ${creds.privateKey}\nPublicKey: ${creds.publicKey}\nIpAddress: ${creds.ipAddress}\nClientId: ${creds.clientId}\n")
+            } else {
+                val file = java.io.File("warp_response.json")
+                file.writeText("FAILED")
+            }
         }
     }
 }
