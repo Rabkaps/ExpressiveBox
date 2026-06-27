@@ -112,15 +112,37 @@ fun VibrantCardContent(
 ) {
     if (cardStyle == "vibrant") {
         val onPrimaryContainer = MaterialTheme.colorScheme.onPrimaryContainer
+        val cardBackground = MaterialTheme.colorScheme.primaryContainer
         MaterialTheme(
             colorScheme = MaterialTheme.colorScheme.copy(
                 primary = onPrimaryContainer,
+                onPrimary = cardBackground,
+                primaryContainer = onPrimaryContainer.copy(alpha = 0.20f),
+                onPrimaryContainer = onPrimaryContainer,
+                
                 secondary = onPrimaryContainer,
+                onSecondary = cardBackground,
+                secondaryContainer = onPrimaryContainer.copy(alpha = 0.20f),
+                onSecondaryContainer = onPrimaryContainer,
+                
+                tertiary = onPrimaryContainer,
+                onTertiary = cardBackground,
+                tertiaryContainer = onPrimaryContainer.copy(alpha = 0.20f),
+                onTertiaryContainer = onPrimaryContainer,
+                
+                surface = cardBackground,
                 onSurface = onPrimaryContainer,
-                onSurfaceVariant = onPrimaryContainer.copy(alpha = 0.70f),
+                onSurfaceVariant = onPrimaryContainer.copy(alpha = 0.80f),
                 surfaceVariant = onPrimaryContainer.copy(alpha = 0.15f),
-                outline = onPrimaryContainer.copy(alpha = 0.30f),
-                outlineVariant = onPrimaryContainer.copy(alpha = 0.20f)
+                
+                outline = onPrimaryContainer.copy(alpha = 0.45f),
+                outlineVariant = onPrimaryContainer.copy(alpha = 0.25f),
+                
+                surfaceContainerLowest = onPrimaryContainer.copy(alpha = 0.05f),
+                surfaceContainerLow = onPrimaryContainer.copy(alpha = 0.10f),
+                surfaceContainer = onPrimaryContainer.copy(alpha = 0.15f),
+                surfaceContainerHigh = onPrimaryContainer.copy(alpha = 0.20f),
+                surfaceContainerHighest = onPrimaryContainer.copy(alpha = 0.25f)
             ),
             content = content
         )
@@ -4444,6 +4466,7 @@ fun ConnectionDashboard(
             containerColor = Color.Transparent
         )
     ) {
+        VibrantCardContent(cardStyle) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
@@ -4621,6 +4644,7 @@ fun ConnectionDashboard(
                     )
                 }
             }
+        }
         }
     }
 }
