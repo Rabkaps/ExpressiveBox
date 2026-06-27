@@ -1185,6 +1185,7 @@ fun MainScreen(
                                         containerColor = Color.Transparent
                                     )
                                 ) {
+                                    VibrantCardContent(settings.cardStyle) {
                                     Column(modifier = Modifier.padding(20.dp)) {
                                         Text(
                                             text = stringResource(R.string.active_node),
@@ -1254,6 +1255,7 @@ fun MainScreen(
                                                     style = MaterialTheme.typography.bodyMedium
                                                 )
                                             }
+                                        }
                                         }
                                     }
                                 }
