@@ -25,7 +25,9 @@ data class InjectorSettings(
     val warpClientId: String = "",
     val vpnModeTunnelGames: Boolean = false,
     val warpDetourMode: String = "proxy",
-    val warpPort: String = "2408"
+    val warpPort: String = "2408",
+    val shareVpnLan: Boolean = false,
+    val shareVpnPort: String = "10808"
 )
 
 object ConfigInjector {
@@ -90,8 +92,9 @@ object ConfigInjector {
             // 1. Pre-resolve proxy server domains to raw IPs to bypass DNS hijacking
             preResolveProxyServers(context, configJson, settings)
 
-            // 2. Inject or update inbounds (TUN interface)
+            // 2. Inject or update inbounds (TUN interface & LAN Proxy Sharing)
             injectTunInbound(configJson, settings)
+            injectLocalProxyInbound(configJson, settings)
 
             // 3. Inject or update DNS (Split DNS rules)
             injectDns(context, configJson, settings)
@@ -135,6 +138,31 @@ object ConfigInjector {
             put("address", JSONArray(listOf("172.19.0.1/30")))
         }
         newInbounds.put(tunInbound)
+        config.put("inbounds", newInbounds)
+    }
+
+    private fun injectLocalProxyInbound(config: JSONObject, settings: InjectorSettings) {
+        val inbounds = config.optJSONArray("inbounds") ?: JSONArray().also { config.put("inbounds", it) }
+        
+        // Remove existing mixed inbounds
+        val newInbounds = JSONArray()
+        for (i in 0 until inbounds.length()) {
+            val inbound = inbounds.optJSONObject(i) ?: continue
+            if (inbound.optString("tag") != "mixed-in") {
+                newInbounds.put(inbound)
+            }
+        }
+        
+        if (settings.shareVpnLan) {
+            val portVal = settings.shareVpnPort.toIntOrNull() ?: 10808
+            val mixedInbound = JSONObject().apply {
+                put("type", "mixed")
+                put("tag", "mixed-in")
+                put("listen", "0.0.0.0")
+                put("listen_port", portVal)
+            }
+            newInbounds.put(mixedInbound)
+        }
         config.put("inbounds", newInbounds)
     }
 

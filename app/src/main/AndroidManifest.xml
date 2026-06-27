@@ -72,6 +72,20 @@
                 <action android:name="com.hambalapps.expressivebox.vpn.ACTION_NEXT_NODE" />
             </intent-filter>
         </receiver>
+
+        <receiver
+            android:name=".widget.VPNWidgetProvider"
+            android:label="ExpressiveBox Switch"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.hambalapps.expressivebox.widget.ACTION_TOGGLE" />
+                <action android:name="com.hambalapps.expressivebox.widget.ACTION_STATE_CHANGED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/vpn_widget_info" />
+        </receiver>
     </application>
 
 </manifest>

@@ -49,6 +49,8 @@ class SettingsManager(private val context: Context) {
         val DELAY_TEST_URL = stringPreferencesKey("delay_test_url")
         val WARP_DETOUR_MODE = stringPreferencesKey("warp_detour_mode")
         val WARP_PORT = stringPreferencesKey("warp_port")
+        val SHARE_VPN_LAN = booleanPreferencesKey("share_vpn_lan")
+        val SHARE_VPN_PORT = stringPreferencesKey("share_vpn_port")
         
         private val defaultThemeKey = if (Config.IS_SPECIAL) "cherry_blossom" else "dynamic"
 
@@ -89,6 +91,8 @@ class SettingsManager(private val context: Context) {
             delayTestUrl = "http://cp.cloudflare.com/generate_204",
             warpDetourMode = "proxy",
             warpPort = "2408",
+            shareVpnLan = false,
+            shareVpnPort = "10808",
             deserializedSubscriptions = emptyList()
         )
     }
@@ -145,6 +149,8 @@ class SettingsManager(private val context: Context) {
             delayTestUrl = prefs[DELAY_TEST_URL] ?: "http://cp.cloudflare.com/generate_204",
             warpDetourMode = prefs[WARP_DETOUR_MODE] ?: "proxy",
             warpPort = prefs[WARP_PORT] ?: "2408",
+            shareVpnLan = prefs[SHARE_VPN_LAN] ?: false,
+            shareVpnPort = prefs[SHARE_VPN_PORT] ?: "10808",
             deserializedSubscriptions = deserialized
         )
     }.distinctUntilChanged()
@@ -223,6 +229,8 @@ class SettingsManager(private val context: Context) {
     suspend fun setDelayTestUrl(value: String) { context.dataStore.edit { it[DELAY_TEST_URL] = value } }
     suspend fun setWarpDetourMode(value: String) { context.dataStore.edit { it[WARP_DETOUR_MODE] = value } }
     suspend fun setWarpPort(value: String) { context.dataStore.edit { it[WARP_PORT] = value } }
+    suspend fun setShareVpnLan(value: Boolean) { context.dataStore.edit { it[SHARE_VPN_LAN] = value } }
+    suspend fun setShareVpnPort(value: String) { context.dataStore.edit { it[SHARE_VPN_PORT] = value } }
 
     val autoConnectSubs: Flow<Set<String>> = context.dataStore.data.map { it[AUTO_CONNECT_SUBS] ?: emptySet() }.distinctUntilChanged()
 
@@ -275,6 +283,8 @@ data class UserSettings(
     val delayTestUrl: String,
     val warpDetourMode: String,
     val warpPort: String,
+    val shareVpnLan: Boolean,
+    val shareVpnPort: String,
     val deserializedSubscriptions: List<Subscription>
 )
 

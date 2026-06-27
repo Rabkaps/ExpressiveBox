@@ -131,6 +131,16 @@ class VpnServiceWrapper : VpnService(), PlatformInterface, CommandServerHandler 
                 if (isForeground) {
                     updateNotification(state)
                 }
+                // Notify home screen widget
+                try {
+                    val intent = Intent("com.hambalapps.expressivebox.widget.ACTION_STATE_CHANGED").apply {
+                        putExtra("state", state)
+                        setPackage(packageName)
+                    }
+                    sendBroadcast(intent)
+                } catch (e: Exception) {
+                    android.util.Log.e("ExpressiveBox", "Failed to broadcast widget update: ${e.message}")
+                }
             }
         }
 
@@ -467,10 +477,12 @@ class VpnServiceWrapper : VpnService(), PlatformInterface, CommandServerHandler 
                 val vpnModeTunnelGamesVal = settingsManager.vpnModeTunnelGames.first()
                 val warpDetourModeVal = settingsManager.warpDetourMode.first()
                 val warpPortVal = settingsManager.warpPort.first()
+                val shareVpnLanVal = settingsManager.settings.first().shareVpnLan
+                val shareVpnPortVal = settingsManager.settings.first().shareVpnPort
                 splitTunnelingEnabledVal = settingsManager.splitTunnelingEnabled.first()
                 splitTunnelingModeVal = settingsManager.splitTunnelingMode.first()
                 splitTunnelingAppsVal = settingsManager.splitTunnelingApps.first()
-
+ 
                 val injectorSettings = InjectorSettings(
                     bypassIran = bypassIranVal,
                     secureDns = secureDnsVal,
@@ -487,7 +499,9 @@ class VpnServiceWrapper : VpnService(), PlatformInterface, CommandServerHandler 
                     warpClientId = warpClientIdVal,
                     vpnModeTunnelGames = vpnModeTunnelGamesVal,
                     warpDetourMode = warpDetourModeVal,
-                    warpPort = warpPortVal
+                    warpPort = warpPortVal,
+                    shareVpnLan = shareVpnLanVal,
+                    shareVpnPort = shareVpnPortVal
                 )
 
                 // Inject our custom bypass-Iran rules, split DNS, and advanced parameters
