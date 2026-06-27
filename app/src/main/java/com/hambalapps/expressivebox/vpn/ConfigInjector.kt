@@ -342,8 +342,8 @@ object ConfigInjector {
         val route = config.optJSONObject("route") ?: JSONObject().also { config.put("route", it) }
         val rules = route.optJSONArray("rules") ?: JSONArray().also { route.put("rules", it) }
 
-        // Remove existing DNS routing and Iran rules to refresh them
-        val newRules = JSONArray()
+        // Filter and separate the original user-defined rules
+        val originalRules = JSONArray()
         for (i in 0 until rules.length()) {
             val r = rules.optJSONObject(i) ?: continue
             val protocol = r.optString("protocol")
@@ -359,12 +359,14 @@ object ConfigInjector {
                              (ruleSetName != null && ruleSetName.contains("ir")) ||
                              (ruleSetArrayVal != null && ruleSetArrayVal.toString().contains("ir"))
             
-            if (protocol != "dns" && !isIranRule) {
-                newRules.put(r)
+            if (protocol != "dns" && !isIranRule && r.optString("action") != "sniff") {
+                originalRules.put(r)
             }
         }
 
-        // Add sniffing rule at the beginning
+        val newRules = JSONArray()
+
+        // 1. Sniff Rule (must be at the top to extract hostnames)
         val sniffRule = JSONObject().apply {
             put("action", "sniff")
             if (settings.vpnMode == "gaming") {
@@ -376,14 +378,14 @@ object ConfigInjector {
         }
         newRules.put(sniffRule)
 
-        // Add standard DNS routing rule (required for internal DNS hijacking)
+        // 2. DNS Hijack Rule (must be at the top)
         val dnsRule = JSONObject().apply {
             put("protocol", "dns")
             put("action", "hijack-dns")
         }
         newRules.put(dnsRule)
 
-        // Block Private DNS (DoT) on port 853 to force fallback to hijacked standard DNS
+        // 3. Block Private DNS (DoT) on port 853 to force fallback to standard DNS
         val blockDotRule = JSONObject().apply {
             put("port", JSONArray(listOf(853)))
             put("action", "reject")
@@ -391,7 +393,7 @@ object ConfigInjector {
         }
         newRules.put(blockDotRule)
 
-        // Route private/local IP networks directly if bypassLan is enabled
+        // 4. Local Bypass LAN/Private IP Networks
         val localIps = mutableListOf<String>().apply {
             add("127.0.0.0/8")
             add("::1/128")
@@ -406,27 +408,11 @@ object ConfigInjector {
                 ))
             }
         }
-        val privateIpsRule = JSONObject().apply {
-            put("ip_cidr", JSONArray(localIps))
-            put("outbound", "direct")
-        }
-        newRules.put(privateIpsRule)
-
-        // Route proxy and secure DNS domains/IPs directly
-        val proxyHosts = getProxyServerHosts(config)
-        val secureDnsHost = extractHostFromUrl(settings.secureDns)
-        val directDomains = mutableListOf<String>()
         val directIps = mutableListOf<String>()
+        val directDomains = mutableListOf<String>()
+        val proxyHosts = getProxyServerHosts(config)
 
-        // Add direct DNS server IP to directIps to ensure it bypasses the VPN tunnel
-        val systemDnsList = getSystemDnsServers(context)
-        var directDnsAddr = "178.22.122.100" // Default Shecan/Local DNS
-        for (dnsIp in systemDnsList) {
-            if (dnsIp != "8.8.8.8" && dnsIp != "8.8.4.4" && dnsIp != "1.1.1.1" && dnsIp != "1.0.0.1" && dnsIp != "9.9.9.9") {
-                directDnsAddr = dnsIp
-                break
-            }
-        }
+        val directDnsAddr = extractHostFromUrl(settings.secureDns) ?: ""
         if (directDnsAddr.isNotEmpty() && isIpAddress(directDnsAddr)) {
             directIps.add(directDnsAddr)
         }
@@ -469,6 +455,13 @@ object ConfigInjector {
             newRules.put(bypassIpsRule)
         }
 
+        val privateIpsRule = JSONObject().apply {
+            put("ip_cidr", JSONArray(localIps))
+            put("outbound", "direct")
+        }
+        newRules.put(privateIpsRule)
+
+        // 5. Bypass Iran Rules (must be high priority before custom/catch-all proxy rules)
         if (settings.bypassIran) {
             val geositeFile = java.io.File(context.filesDir, "geosite-ir.srs")
             val geoipFile = java.io.File(context.filesDir, "geoip-ir.srs")
@@ -491,7 +484,6 @@ object ConfigInjector {
             route.put("rule_set", ruleSetArray)
 
             if (geositeFile.exists()) {
-                // Add Iran Bypass Geosite Rule via rule_set
                 val irGeosite = JSONObject().apply {
                     put("rule_set", JSONArray(listOf("geosite-ir")))
                     put("outbound", "direct")
@@ -500,7 +492,6 @@ object ConfigInjector {
             }
 
             if (geoipFile.exists()) {
-                // Add Iran Bypass GeoIP Rule via rule_set
                 val irGeoip = JSONObject().apply {
                     put("rule_set", JSONArray(listOf("geoip-ir")))
                     put("outbound", "direct")
@@ -508,7 +499,6 @@ object ConfigInjector {
                 newRules.put(irGeoip)
             }
 
-            // Add Iran .ir Suffix Rule
             val irSuffix = JSONObject().apply {
                 put("domain_suffix", JSONArray(listOf(".ir")))
                 put("outbound", "direct")
@@ -516,6 +506,7 @@ object ConfigInjector {
             newRules.put(irSuffix)
         }
 
+        // 6. Gaming / AI Bypass Outbounds Rules
         if (settings.vpnMode == "gaming") {
             val gameRouteRule = JSONObject().apply {
                 put("domain_suffix", JSONArray(gamingDomains))
@@ -528,6 +519,11 @@ object ConfigInjector {
                 put("outbound", "warp-out")
             }
             newRules.put(aiRouteRule)
+        }
+
+        // 7. Append original custom profile rules (lower priority)
+        for (i in 0 until originalRules.length()) {
+            newRules.put(originalRules.getJSONObject(i))
         }
 
         route.put("rules", newRules)

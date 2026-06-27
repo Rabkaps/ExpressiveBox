@@ -46,7 +46,7 @@
             </LinearLayout>
 
             <!-- Toggle Power Button -->
-            <ImageButton
+            <ImageView
                 android:id="@+id/widget_button_toggle"
                 android:layout_width="48dp"
                 android:layout_height="48dp"
@@ -54,12 +54,15 @@
                 android:layout_centerVertical="true"
                 android:background="@drawable/widget_button_background"
                 android:src="@drawable/ic_power"
+                android:scaleType="center"
+                android:clickable="true"
+                android:focusable="true"
                 android:contentDescription="Toggle Connection" />
 
         </RelativeLayout>
 
         <!-- Spacer -->
-        <View
+        <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="1dp"
             android:background="#303A40"
@@ -79,15 +82,11 @@
                 android:src="@drawable/ic_node"
                 android:tint="#808080" />
 
-            <!-- Using empty transparent View as layout spacer to avoid layout resource namespace resolution issues -->
-            <View
-                android:layout_width="8dp"
-                android:layout_height="1dp" />
-
             <TextView
                 android:id="@+id/widget_node_name"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
                 android:text="No active node selected"
                 android:textColor="#E0E0E0"
                 android:textSize="12sp"

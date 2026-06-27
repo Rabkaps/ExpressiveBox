@@ -247,10 +247,13 @@ fun MainScreen(
                 }
                 
                 if (shouldUpdate) {
+                    // Delay 5 seconds on startup to allow the network interfaces to fully initialize
+                    kotlinx.coroutines.delay(5000)
                     try {
                         val currentListStr = currentSettings.subscriptionList
                         val currentSubs = deserializeSubscriptions(currentListStr)
                         var anyUpdated = false
+                        var updateFailed = false
                         val updatedSubs = currentSubs.map { sub ->
                             if (!sub.url.startsWith("local://")) {
                                 try {
@@ -268,6 +271,7 @@ fun MainScreen(
                                         sub
                                     }
                                 } catch (e: Exception) {
+                                    updateFailed = true
                                     sub
                                 }
                             } else {
@@ -293,7 +297,10 @@ fun MainScreen(
                                 }
                             }
                         }
-                        settingsManager.setLastSubsUpdateTime(currentTime)
+                        // Only save last update timestamp if all updates succeeded to avoid locking out retries
+                        if (!updateFailed) {
+                            settingsManager.setLastSubsUpdateTime(currentTime)
+                        }
                     } catch (e: Exception) {
                         // Silently handle error
                     }

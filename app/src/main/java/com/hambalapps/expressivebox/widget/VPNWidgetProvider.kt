@@ -115,12 +115,12 @@ class VPNWidgetProvider : AppWidgetProvider() {
                     views.setTextColor(R.id.widget_status, statusColor)
                     views.setTextViewText(R.id.widget_node_name, nodeName)
                     
-                    val buttonBgColor = when (lastVpnState) {
-                        "CONNECTED" -> 0xFF624FBE.toInt()
-                        "CONNECTING" -> 0xFFD03A60.toInt()
-                        else -> 0xFF353A42.toInt()
+                    val iconTintColor = when (lastVpnState) {
+                        "CONNECTED" -> 0xFF80C5FF.toInt()
+                        "CONNECTING" -> 0xFFFFD54F.toInt()
+                        else -> 0xFFFFFFFF.toInt()
                     }
-                    views.setInt(R.id.widget_button_toggle, "setBackgroundColor", buttonBgColor)
+                    views.setInt(R.id.widget_button_toggle, "setColorFilter", iconTintColor)
 
                     val toggleIntent = Intent(context, VPNWidgetProvider::class.java).apply {
                         action = ACTION_TOGGLE
