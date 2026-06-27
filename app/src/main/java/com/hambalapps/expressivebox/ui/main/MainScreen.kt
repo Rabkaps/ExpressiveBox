@@ -144,9 +144,13 @@ fun VibrantCardContent(
                 surfaceContainer = onPrimaryContainer.copy(alpha = 0.15f),
                 surfaceContainerHigh = onPrimaryContainer.copy(alpha = 0.20f),
                 surfaceContainerHighest = onPrimaryContainer.copy(alpha = 0.25f)
-            ),
-            content = content
-        )
+            )
+        ) {
+            CompositionLocalProvider(
+                LocalContentColor provides MaterialTheme.colorScheme.onSurface,
+                content = content
+            )
+        }
     } else {
         content()
     }
