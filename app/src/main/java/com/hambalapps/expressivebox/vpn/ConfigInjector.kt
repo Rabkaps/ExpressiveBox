@@ -30,6 +30,9 @@ data class InjectorSettings(
 
 object ConfigInjector {
 
+    @Volatile
+    private var dohWorking = true
+
     private val gamingDomains = listOf(
         "pubgmobile.com", "pubg.com", "riotgames.com", "playvalorant.com", "leagueoflegends.com",
         "activision.com", "callofduty.com", "epicgames.com", "ea.com", "origin.com",
@@ -49,6 +52,7 @@ object ConfigInjector {
     )
 
     fun injectConfig(context: Context, rawProfile: String, settings: InjectorSettings): String {
+        dohWorking = true
         try {
             val trimmedProfile = rawProfile.trim()
             val configJson = if (trimmedProfile.startsWith("{")) {
@@ -1309,6 +1313,7 @@ object ConfigInjector {
     }
 
     private fun resolveDomainViaDoh(domain: String, timeoutMs: Int = 3000): String? {
+        if (!dohWorking) return null
         try {
             val url = java.net.URL("https://8.8.8.8/resolve?name=$domain&type=A")
             val conn = url.openConnection() as java.net.HttpURLConnection
@@ -1335,6 +1340,7 @@ object ConfigInjector {
                 }
             }
         } catch (e: Exception) {
+            dohWorking = false
             android.util.Log.e("ExpressiveBox", "DoH resolution for $domain failed: ${e.message}")
         }
         return null

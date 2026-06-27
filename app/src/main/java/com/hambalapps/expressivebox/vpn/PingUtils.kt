@@ -72,6 +72,21 @@ fun getHostAndPortFromLink(link: String): Pair<String, Int>? {
                 }
             }
         }
+
+        if (scheme == "ss") {
+            val atIdx = mainPart.indexOf("@")
+            if (atIdx < 0) {
+                val decoded = tryBase64Decode(mainPart)
+                if (decoded != null && decoded.contains("@")) {
+                    val parts = decoded.split("@")
+                    val serverPart = parts[1]
+                    val colonIdx = serverPart.lastIndexOf(":")
+                    val h = if (colonIdx >= 0) serverPart.substring(0, colonIdx) else serverPart
+                    val pStr = if (colonIdx >= 0) serverPart.substring(colonIdx + 1) else "443"
+                    return Pair(h, pStr.toIntOrNull() ?: 443)
+                }
+            }
+        }
         
         val serverPart = if (mainPart.contains("@")) mainPart.substring(mainPart.indexOf("@") + 1) else mainPart
         val colonIdx = serverPart.lastIndexOf(":")
@@ -113,6 +128,29 @@ object ProxyNameResolver {
                     if (ps.isNotEmpty()) {
                         nameCache[link] = ps
                         return ps
+                    }
+                    val add = json.optString("add")
+                    if (add.isNotEmpty()) {
+                        val cleanHost = if (add.length > 20) add.take(20) + "..." else add
+                        val name = "VMESS ($cleanHost)"
+                        nameCache[link] = name
+                        return name
+                    }
+                }
+            } catch (e: Exception) {}
+        }
+
+        if (trimmed.startsWith("ss://")) {
+            try {
+                val mainPart = trimmed.substring(5).substringBefore("#").substringBefore("?")
+                if (!mainPart.contains("@")) {
+                    val decoded = tryBase64Decode(mainPart)
+                    if (decoded != null && decoded.contains("@")) {
+                        val host = decoded.substringAfter("@").substringBefore(":")
+                        val cleanHost = if (host.length > 20) host.take(20) + "..." else host
+                        val name = "SS ($cleanHost)"
+                        nameCache[link] = name
+                        return name
                     }
                 }
             } catch (e: Exception) {}

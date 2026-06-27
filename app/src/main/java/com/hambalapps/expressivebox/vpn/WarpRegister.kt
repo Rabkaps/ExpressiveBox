@@ -18,8 +18,12 @@ data class WarpCredentials(
 
 suspend fun registerWarpAccount(): WarpCredentials? = withContext(Dispatchers.IO) {
     try {
-        // 1. Generate X25519 KeyPair using Android KeyPairGenerator (API 33+)
-        val kpg = KeyPairGenerator.getInstance("X25519")
+        // 1. Generate X25519 KeyPair using Android KeyPairGenerator (API 33+, fallback to BC on older)
+        val kpg = try {
+            KeyPairGenerator.getInstance("X25519")
+        } catch (e: Exception) {
+            KeyPairGenerator.getInstance("X25519", "BC")
+        }
         val kp = kpg.generateKeyPair()
         
         // Extract raw 32-byte keys from PKCS#8 (48 bytes) and X.509 SubjectPublicKeyInfo (44 bytes) formats

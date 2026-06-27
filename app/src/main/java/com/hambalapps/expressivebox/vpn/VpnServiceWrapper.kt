@@ -554,8 +554,16 @@ class VpnServiceWrapper : VpnService(), PlatformInterface, CommandServerHandler 
         }
     }
 
+    @Volatile
+    private var isReloading = false
+
     private fun reloadVpnEngine() {
         serviceScope.launch {
+            if (isReloading) {
+                log("Reconnection already in progress. Skipping duplicate event.")
+                return@launch
+            }
+            isReloading = true
             try {
                 log("Reconnecting VPN Engine (Teardown & Re-initialize)...")
                 _vpnState.value = "CONNECTING"
@@ -601,6 +609,8 @@ class VpnServiceWrapper : VpnService(), PlatformInterface, CommandServerHandler 
                 log("Failed to reconnect VPN: ${e.message}")
                 e.printStackTrace()
                 stopVpnEngine()
+            } finally {
+                isReloading = false
             }
         }
     }

@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import com.hambalapps.expressivebox.data.SettingsManager
 import com.hambalapps.expressivebox.data.deserializeSubscriptions
+import com.hambalapps.expressivebox.data.Subscription
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -29,7 +30,13 @@ class NotificationActionReceiver : BroadcastReceiver() {
                     val activeProfile = settingsManager.activeProfile.first()
                     
                     val subscriptions = deserializeSubscriptions(subscriptionListStr)
-                    val activeSub = subscriptions.find { it.id == activeSubId } ?: subscriptions.firstOrNull()
+                    val activeSub = subscriptions.find { it.id == activeSubId }
+                        ?: if (activeSubId == "manual") {
+                            val manualStr = settingsManager.manualServers.first()
+                            Subscription(id = "manual", name = "Manual / Custom Configs", url = "local://manual", servers = manualStr)
+                        } else {
+                            subscriptions.firstOrNull()
+                        }
                     
                     val serverList = activeSub?.servers?.split("\n")?.filter { it.isNotEmpty() } ?: emptyList()
                     if (serverList.size > 1) {

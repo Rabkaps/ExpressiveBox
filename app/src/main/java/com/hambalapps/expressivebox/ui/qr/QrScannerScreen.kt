@@ -150,6 +150,7 @@ fun CameraPreviewScanner(
 
     val cameraExecutor: ExecutorService = remember { Executors.newSingleThreadExecutor() }
     var activeCameraProvider by remember { mutableStateOf<ProcessCameraProvider?>(null) }
+    var imageAnalysisRef by remember { mutableStateOf<ImageAnalysis?>(null) }
 
     val options = remember {
         BarcodeScannerOptions.Builder()
@@ -160,6 +161,11 @@ fun CameraPreviewScanner(
 
     DisposableEffect(Unit) {
         onDispose {
+            try {
+                imageAnalysisRef?.clearAnalyzer()
+            } catch (e: Exception) {
+                // Ignore
+            }
             try {
                 activeCameraProvider?.unbindAll()
             } catch (e: Exception) {
@@ -287,6 +293,8 @@ fun CameraPreviewScanner(
                         }
                     }
                 }
+            
+            imageAnalysisRef = imageAnalysis
 
             val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
 
