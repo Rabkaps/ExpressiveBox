@@ -382,7 +382,7 @@ fun MainScreen(
     val outlineVariant = MaterialTheme.colorScheme.outlineVariant
 
     val cardBorderBrush = remember(isDark, cardStyle, primaryColor, secondaryColor, outlineVariant) {
-        if (cardStyle == "solid" || cardStyle == "pastel") {
+        if (cardStyle == "solid" || cardStyle == "vibrant") {
             SolidColor(outlineVariant)
         } else {
             val colors = listOf(
@@ -396,7 +396,7 @@ fun MainScreen(
     val primaryCardBrush = remember(isDark, cardStyle, primaryColor, secondaryColor, surfaceContainerHigh, primaryContainer) {
         if (cardStyle == "solid") {
             SolidColor(surfaceContainerHigh)
-        } else if (cardStyle == "pastel") {
+        } else if (cardStyle == "vibrant") {
             SolidColor(primaryContainer)
         } else {
             val colors = if (isDark) {
@@ -417,7 +417,7 @@ fun MainScreen(
     val secondaryCardBrush = remember(isDark, cardStyle, secondaryColor, tertiaryColor, surfaceContainer, secondaryContainer, primaryContainer) {
         if (cardStyle == "solid") {
             SolidColor(surfaceContainer)
-        } else if (cardStyle == "pastel") {
+        } else if (cardStyle == "vibrant") {
             SolidColor(primaryContainer)
         } else {
             val colors = if (isDark) {
@@ -438,7 +438,7 @@ fun MainScreen(
     val tertiaryCardBrush = remember(isDark, cardStyle, tertiaryColor, primaryColor, surfaceContainerLow, tertiaryContainer, primaryContainer) {
         if (cardStyle == "solid") {
             SolidColor(surfaceContainerLow)
-        } else if (cardStyle == "pastel") {
+        } else if (cardStyle == "vibrant") {
             SolidColor(primaryContainer)
         } else {
             val colors = if (isDark) {
@@ -471,9 +471,9 @@ fun MainScreen(
     val activeCardBackgroundBrush = remember(isDark, cardStyle, primaryColor, secondaryColor, tertiaryColor, primaryContainer, flowOffset) {
         if (cardStyle == "solid") {
             SolidColor(primaryContainer)
-        } else if (cardStyle == "pastel") {
+        } else if (cardStyle == "vibrant") {
             Brush.linearGradient(
-                colors = listOf(primaryColor, primaryContainer),
+                colors = listOf(primaryColor, secondaryColor),
                 start = Offset(flowOffset - 500f, 0f),
                 end = Offset(flowOffset + 500f, 1000f)
             )
@@ -3012,7 +3012,7 @@ fun MainScreen(
                                             listOf(
                                                 "glass" to R.string.style_glass,
                                                 "solid" to R.string.style_solid,
-                                                "pastel" to R.string.style_pastel
+                                                "vibrant" to R.string.style_vibrant
                                             ).forEach { (styleKey, stringId) ->
                                                 FilterChip(
                                                     selected = cardStyle == styleKey,
@@ -4310,7 +4310,7 @@ fun ConnectionDashboard(
     val primaryContainer = MaterialTheme.colorScheme.primaryContainer
 
     val cardBorderBrush = remember(isDark, cardStyle, primaryColor, secondaryColor, outlineVariant) {
-        if (cardStyle == "solid" || cardStyle == "pastel") {
+        if (cardStyle == "solid" || cardStyle == "vibrant") {
             SolidColor(outlineVariant)
         } else {
             val colors = listOf(
@@ -4324,7 +4324,7 @@ fun ConnectionDashboard(
     val primaryCardBrush = remember(isDark, cardStyle, primaryColor, secondaryColor, surfaceContainerHigh, primaryContainer) {
         if (cardStyle == "solid") {
             SolidColor(surfaceContainerHigh)
-        } else if (cardStyle == "pastel") {
+        } else if (cardStyle == "vibrant") {
             SolidColor(primaryContainer)
         } else {
             val colors = if (isDark) {
@@ -4356,9 +4356,9 @@ fun ConnectionDashboard(
     val activeCardBackgroundBrush = remember(isDark, cardStyle, primaryColor, secondaryColor, tertiaryColor, primaryContainer, flowOffset) {
         if (cardStyle == "solid") {
             SolidColor(primaryContainer)
-        } else if (cardStyle == "pastel") {
+        } else if (cardStyle == "vibrant") {
             Brush.linearGradient(
-                colors = listOf(primaryColor, primaryContainer),
+                colors = listOf(primaryColor, secondaryColor),
                 start = Offset(flowOffset - 500f, 0f),
                 end = Offset(flowOffset + 500f, 1000f)
             )
@@ -5231,7 +5231,7 @@ private fun LogsConsole(
     val primaryContainer = MaterialTheme.colorScheme.primaryContainer
 
     val cardBorderBrush = remember(isDark, cardStyle, primaryColor, secondaryColor, outlineVariant) {
-        if (cardStyle == "solid" || cardStyle == "pastel") {
+        if (cardStyle == "solid" || cardStyle == "vibrant") {
             SolidColor(outlineVariant)
         } else {
             val colors = listOf(
@@ -5245,7 +5245,7 @@ private fun LogsConsole(
     val tertiaryCardBrush = remember(isDark, cardStyle, tertiaryColor, primaryColor, surfaceContainerLow, tertiaryContainer, primaryContainer) {
         if (cardStyle == "solid") {
             SolidColor(surfaceContainerLow)
-        } else if (cardStyle == "pastel") {
+        } else if (cardStyle == "vibrant") {
             SolidColor(primaryContainer)
         } else {
             val colors = if (isDark) {

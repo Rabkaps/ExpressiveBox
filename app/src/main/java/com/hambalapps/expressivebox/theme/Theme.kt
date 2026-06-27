@@ -549,7 +549,7 @@ fun ExpressiveBoxTheme(
 
         // Material Expressive Color & Surface Strategy
         if (isDark) {
-            if (cardStyle == "pastel") {
+            if (cardStyle == "vibrant") {
                 baseScheme.copy(
                     background = Color.Black,
                     surface = Color.Black,
@@ -559,17 +559,17 @@ fun ExpressiveBoxTheme(
                     surfaceContainer = tintColor(Color.Black, baseScheme.primary, ratio = 0.28f),
                     surfaceContainerHigh = tintColor(Color.Black, baseScheme.primary, ratio = 0.38f),
                     surfaceContainerHighest = tintColor(Color.Black, baseScheme.primary, ratio = 0.48f),
-                    primaryContainer = tintColor(Color.Black, baseScheme.primary, ratio = 0.55f),
-                    onPrimaryContainer = tintColor(Color.White, baseScheme.primary, ratio = 0.90f),
-                    secondaryContainer = tintColor(Color.Black, baseScheme.primary, ratio = 0.55f),
-                    onSecondaryContainer = tintColor(Color.White, baseScheme.primary, ratio = 0.90f),
-                    tertiaryContainer = tintColor(Color.Black, baseScheme.primary, ratio = 0.55f),
-                    onTertiaryContainer = tintColor(Color.White, baseScheme.primary, ratio = 0.90f),
+                    primaryContainer = baseScheme.primary,
+                    onPrimaryContainer = tintColor(Color.Black, baseScheme.primary, ratio = 0.95f),
+                    secondaryContainer = baseScheme.primary,
+                    onSecondaryContainer = tintColor(Color.Black, baseScheme.primary, ratio = 0.95f),
+                    tertiaryContainer = baseScheme.primary,
+                    onTertiaryContainer = tintColor(Color.Black, baseScheme.primary, ratio = 0.95f),
                     onSurface = tintColor(Color.White, baseScheme.primary, ratio = 0.90f),
                     onSurfaceVariant = tintColor(Color.White, baseScheme.primary, ratio = 0.75f),
                     onBackground = tintColor(Color.White, baseScheme.primary, ratio = 0.90f),
                     outline = tintColor(Color.White, baseScheme.primary, ratio = 0.45f),
-                    outlineVariant = tintColor(Color.Black, baseScheme.primary, ratio = 0.35f)
+                    outlineVariant = baseScheme.primary
                 )
             } else {
                 baseScheme.copy(
@@ -584,7 +584,7 @@ fun ExpressiveBoxTheme(
                 )
             }
         } else {
-            if (cardStyle == "pastel") {
+            if (cardStyle == "vibrant") {
                 baseScheme.copy(
                     background = tintColor(Color.White, baseScheme.primary, ratio = 0.16f),
                     surface = tintColor(Color.White, baseScheme.primary, ratio = 0.16f),
@@ -594,17 +594,17 @@ fun ExpressiveBoxTheme(
                     surfaceContainer = tintColor(Color.White, baseScheme.primary, ratio = 0.16f),
                     surfaceContainerHigh = tintColor(Color.White, baseScheme.primary, ratio = 0.20f),
                     surfaceContainerHighest = tintColor(Color.White, baseScheme.primary, ratio = 0.24f),
-                    primaryContainer = tintColor(Color.White, baseScheme.primary, ratio = 0.60f),
-                    onPrimaryContainer = tintColor(Color.Black, baseScheme.primary, ratio = 0.85f),
-                    secondaryContainer = tintColor(Color.White, baseScheme.primary, ratio = 0.60f),
-                    onSecondaryContainer = tintColor(Color.Black, baseScheme.primary, ratio = 0.85f),
-                    tertiaryContainer = tintColor(Color.White, baseScheme.primary, ratio = 0.60f),
-                    onTertiaryContainer = tintColor(Color.Black, baseScheme.primary, ratio = 0.85f),
+                    primaryContainer = baseScheme.primary,
+                    onPrimaryContainer = Color.White,
+                    secondaryContainer = baseScheme.primary,
+                    onSecondaryContainer = Color.White,
+                    tertiaryContainer = baseScheme.primary,
+                    onTertiaryContainer = Color.White,
                     onSurface = tintColor(Color.Black, baseScheme.primary, ratio = 0.85f),
                     onSurfaceVariant = tintColor(Color.Black, baseScheme.primary, ratio = 0.70f),
                     onBackground = tintColor(Color.Black, baseScheme.primary, ratio = 0.85f),
                     outline = tintColor(Color.Black, baseScheme.primary, ratio = 0.45f),
-                    outlineVariant = tintColor(Color.White, baseScheme.primary, ratio = 0.30f)
+                    outlineVariant = baseScheme.primary
                 )
             } else {
                 baseScheme.copy(
