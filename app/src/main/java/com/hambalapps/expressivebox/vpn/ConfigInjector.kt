@@ -1272,8 +1272,6 @@ object ConfigInjector {
     }
 
     private fun preResolveProxyServers(context: Context, config: JSONObject, settings: InjectorSettings) {
-        // Disable pre-resolving proxy server hostname to avoid local DNS poisoning/hijacking
-        return
         val outbounds = config.optJSONArray("outbounds") ?: return
         for (i in 0 until outbounds.length()) {
             val outbound = outbounds.optJSONObject(i) ?: continue
@@ -1345,12 +1343,12 @@ object ConfigInjector {
     private fun resolveDomainViaDoh(domain: String, timeoutMs: Int = 3000): String? {
         if (!dohWorking) return null
         try {
-            val url = java.net.URL("https://8.8.8.8/resolve?name=$domain&type=A")
+            val url = java.net.URL("https://1.1.1.1/dns-query?name=$domain&type=A")
             val conn = url.openConnection() as java.net.HttpURLConnection
             conn.connectTimeout = timeoutMs
             conn.readTimeout = timeoutMs
             conn.requestMethod = "GET"
-            conn.setRequestProperty("Accept", "application/json")
+            conn.setRequestProperty("Accept", "application/dns-json")
             
             if (conn.responseCode == 200) {
                 val responseText = conn.inputStream.bufferedReader().use { it.readText() }
@@ -1386,8 +1384,8 @@ object ConfigInjector {
         val dnsServers = mutableListOf<String>()
         
         if (settings.bypassIran) {
-            // For Iran: prioritize clean domestic resolvers that bypass censorship/sanctions, then Cloudflare
-            listOf("185.51.200.2", "178.22.122.100", "10.202.10.10", "1.1.1.1", "8.8.8.8").forEach { ip ->
+            // For Iran: prioritize clean public resolvers (e.g. 4.2.2.4, 8.8.8.8, 1.1.1.1) to prevent local mobile carrier poisoning
+            listOf("8.8.8.8", "1.1.1.1", "4.2.2.4", "185.51.200.2", "178.22.122.100").forEach { ip ->
                 if (!dnsServers.contains(ip)) {
                     dnsServers.add(ip)
                 }
