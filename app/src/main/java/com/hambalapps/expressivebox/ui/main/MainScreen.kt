@@ -524,17 +524,23 @@ fun MainScreen(
         }
     }
 
-    // Active Card background animation (alive and pulsing flow)
-    val infiniteTransition = rememberInfiniteTransition(label = "ActiveCardTransition")
-    val flowOffset by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1000f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 6000, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "flowOffset"
-    )
+    // Active Card background animation (only runs when connected/connecting to save CPU)
+    val flowOffsetState = remember { androidx.compose.animation.core.Animatable(0f) }
+    val isVpnActive = vpnState == "CONNECTED" || vpnState == "CONNECTING"
+    LaunchedEffect(isVpnActive) {
+        if (isVpnActive) {
+            flowOffsetState.animateTo(
+                targetValue = 1000f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(durationMillis = 6000, easing = LinearEasing),
+                    repeatMode = RepeatMode.Reverse
+                )
+            )
+        } else {
+            flowOffsetState.snapTo(0f)
+        }
+    }
+    val flowOffset = flowOffsetState.value
 
     val activeCardBackgroundBrush = remember(isDark, cardStyle, primaryColor, secondaryColor, tertiaryColor, primaryContainer, flowOffset) {
         if (cardStyle == "solid") {
@@ -4725,16 +4731,22 @@ fun ConnectionDashboard(
         }
     }
 
-    val pulseInfiniteTransition = rememberInfiniteTransition(label = "ConnectingPulse")
-    val pulseScale by pulseInfiniteTransition.animateFloat(
-        initialValue = 0.98f,
-        targetValue = 1.06f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1000, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "PulseScale"
-    )
+    val pulseScaleState = remember { androidx.compose.animation.core.Animatable(1.0f) }
+    val isPulseActive = state == "CONNECTING" || state == "DISCONNECTING"
+    LaunchedEffect(isPulseActive) {
+        if (isPulseActive) {
+            pulseScaleState.animateTo(
+                targetValue = 1.06f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(1000, easing = FastOutSlowInEasing),
+                    repeatMode = RepeatMode.Reverse
+                )
+            )
+        } else {
+            pulseScaleState.snapTo(1.0f)
+        }
+    }
+    val pulseScale = pulseScaleState.value
 
     val scaleFactor by transition.animateFloat(
         label = "ButtonScale",
@@ -4868,16 +4880,23 @@ fun ConnectionDashboard(
         }
     }
 
-    val infiniteTransition = rememberInfiniteTransition(label = "ActiveCardDashboardTransition")
-    val flowOffset by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1000f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 6000, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "flowOffset"
-    )
+    // Active Card background animation (only runs when connected/connecting to save CPU)
+    val flowOffsetState = remember { androidx.compose.animation.core.Animatable(0f) }
+    val isVpnActive = state == "CONNECTED" || state == "CONNECTING"
+    LaunchedEffect(isVpnActive) {
+        if (isVpnActive) {
+            flowOffsetState.animateTo(
+                targetValue = 1000f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(durationMillis = 6000, easing = LinearEasing),
+                    repeatMode = RepeatMode.Reverse
+                )
+            )
+        } else {
+            flowOffsetState.snapTo(0f)
+        }
+    }
+    val flowOffset = flowOffsetState.value
 
     val activeCardBackgroundBrush = remember(isDark, cardStyle, primaryColor, secondaryColor, tertiaryColor, primaryContainer, flowOffset) {
         if (cardStyle == "solid") {
@@ -5464,27 +5483,39 @@ fun WaveVisualizer(
     secondaryColor: Color,
     modifier: Modifier = Modifier
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "WaveVisualizerTransition")
+    val isAnimating = state == "CONNECTED" || state == "CONNECTING"
     
-    val phase1 by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 2f * Math.PI.toFloat(),
-        animationSpec = infiniteRepeatable(
-            animation = tween(4500, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "phase1"
-    )
-
-    val phase2 by infiniteTransition.animateFloat(
-        initialValue = 2f * Math.PI.toFloat(),
-        targetValue = 0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(6500, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "phase2"
-    )
+    val phase1State = remember { androidx.compose.animation.core.Animatable(0f) }
+    val phase2State = remember { androidx.compose.animation.core.Animatable(2f * Math.PI.toFloat()) }
+    
+    LaunchedEffect(isAnimating) {
+        if (isAnimating) {
+            launch {
+                phase1State.animateTo(
+                    targetValue = 2f * Math.PI.toFloat(),
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(4500, easing = LinearEasing),
+                        repeatMode = RepeatMode.Restart
+                    )
+                )
+            }
+            launch {
+                phase2State.animateTo(
+                    targetValue = 0f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(6500, easing = LinearEasing),
+                        repeatMode = RepeatMode.Restart
+                    )
+                )
+            }
+        } else {
+            phase1State.snapTo(0f)
+            phase2State.snapTo(2f * Math.PI.toFloat())
+        }
+    }
+    
+    val phase1 = phase1State.value
+    val phase2 = phase2State.value
     
     val amplitudeMultiplier by animateFloatAsState(
         targetValue = if (state == "CONNECTED" || state == "CONNECTING") 1f else 0f,
