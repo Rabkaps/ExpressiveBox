@@ -1,80 +1,48 @@
 <?xml version="1.0" encoding="utf-8"?>
-<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_container"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:orientation="horizontal"
+    android:paddingHorizontal="16dp"
+    android:paddingVertical="8dp"
+    android:gravity="center_vertical"
     android:theme="@style/Theme.ExpressiveBox"
-    android:padding="4dp">
+    android:background="@drawable/widget_background_pill">
 
-    <!-- Capsule Card Background (Fixed height centered vertically) -->
-    <LinearLayout
-        android:id="@+id/widget_container"
-        android:layout_width="match_parent"
-        android:layout_height="60dp"
-        android:layout_centerInParent="true"
-        android:orientation="horizontal"
-        android:paddingHorizontal="16dp"
-        android:gravity="center_vertical"
-        android:background="@drawable/widget_background_pill">
+    <!-- Small Node Status Icon -->
+    <ImageView
+        android:layout_width="20dp"
+        android:layout_height="20dp"
+        android:src="@drawable/ic_node"
+        android:tint="?attr/colorPrimary"
+        android:layout_marginEnd="10dp" />
 
-        <!-- App Icon/Logo & Info -->
-        <LinearLayout
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:orientation="horizontal"
-            android:gravity="center_vertical">
+    <!-- Connection Status Text -->
+    <TextView
+        android:id="@+id/widget_status"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:text="UNPROTECTED"
+        android:textColor="?attr/colorOutline"
+        android:textSize="15sp"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:textStyle="bold"
+        android:letterSpacing="0.02" />
 
-            <!-- Small Node Icon or App Icon -->
-            <ImageView
-                android:layout_width="20dp"
-                android:layout_height="20dp"
-                android:src="@drawable/ic_node"
-                android:tint="?attr/colorPrimary"
-                android:layout_marginEnd="8dp" />
+    <!-- Toggle Power Button -->
+    <ImageView
+        android:id="@+id/widget_button_toggle"
+        android:layout_width="36dp"
+        android:layout_height="36dp"
+        android:background="@drawable/widget_button_background"
+        android:src="@drawable/ic_power"
+        android:padding="8dp"
+        android:scaleType="fitCenter"
+        android:clickable="true"
+        android:focusable="true"
+        android:contentDescription="Toggle Connection" />
 
-            <LinearLayout
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:orientation="vertical">
-
-                <TextView
-                    android:id="@+id/widget_title"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="ExpressiveBox"
-                    android:textColor="?attr/colorOnSurfaceVariant"
-                    android:textSize="10sp"
-                    android:textStyle="bold"
-                    android:maxLines="1"
-                    android:ellipsize="end"
-                    android:letterSpacing="0.03" />
-
-                <TextView
-                    android:id="@+id/widget_status"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="UNPROTECTED"
-                    android:textColor="?attr/colorOutline"
-                    android:textSize="14sp"
-                    android:maxLines="1"
-                    android:ellipsize="end"
-                    android:textStyle="bold" />
-            </LinearLayout>
-        </LinearLayout>
-
-        <!-- Toggle Power Button -->
-        <ImageView
-            android:id="@+id/widget_button_toggle"
-            android:layout_width="36dp"
-            android:layout_height="36dp"
-            android:background="@drawable/widget_button_background"
-            android:src="@drawable/ic_power"
-            android:padding="8dp"
-            android:scaleType="fitCenter"
-            android:clickable="true"
-            android:focusable="true"
-            android:contentDescription="Toggle Connection" />
-
-    </LinearLayout>
-
-</RelativeLayout>
+</LinearLayout>
