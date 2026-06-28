@@ -57,6 +57,8 @@ class SettingsManager(private val context: Context) {
         val GLOBAL_CAMOUFLAGE_PRESET = stringPreferencesKey("global_camouflage_preset")
         val GLOBAL_CAMOUFLAGE_SNI = stringPreferencesKey("global_camouflage_sni")
         val GLOBAL_CAMOUFLAGE_HOST = stringPreferencesKey("global_camouflage_host")
+        val GLOBAL_CAMOUFLAGE_CUSTOM_IPS = stringPreferencesKey("global_camouflage_custom_ips")
+        val GLOBAL_CAMOUFLAGE_TIMEOUT = stringPreferencesKey("global_camouflage_timeout")
         
         private val defaultThemeKey = if (Config.IS_SPECIAL) "cherry_blossom" else "dynamic"
 
@@ -105,7 +107,9 @@ class SettingsManager(private val context: Context) {
             globalCamouflageEnabled = false,
             globalCamouflagePreset = "cloudflare",
             globalCamouflageSni = "speedtest.net",
-            globalCamouflageHost = ""
+            globalCamouflageHost = "",
+            globalCamouflageCustomIps = "",
+            globalCamouflageTimeout = "600"
         )
     }
 
@@ -169,7 +173,9 @@ class SettingsManager(private val context: Context) {
             globalCamouflageEnabled = prefs[GLOBAL_CAMOUFLAGE_ENABLED] ?: false,
             globalCamouflagePreset = prefs[GLOBAL_CAMOUFLAGE_PRESET] ?: "cloudflare",
             globalCamouflageSni = prefs[GLOBAL_CAMOUFLAGE_SNI] ?: "speedtest.net",
-            globalCamouflageHost = prefs[GLOBAL_CAMOUFLAGE_HOST] ?: ""
+            globalCamouflageHost = prefs[GLOBAL_CAMOUFLAGE_HOST] ?: "",
+            globalCamouflageCustomIps = prefs[GLOBAL_CAMOUFLAGE_CUSTOM_IPS] ?: "",
+            globalCamouflageTimeout = prefs[GLOBAL_CAMOUFLAGE_TIMEOUT] ?: "600"
         )
     }.distinctUntilChanged()
 
@@ -259,11 +265,15 @@ class SettingsManager(private val context: Context) {
     val globalCamouflagePreset: Flow<String> = context.dataStore.data.map { it[GLOBAL_CAMOUFLAGE_PRESET] ?: "cloudflare" }.distinctUntilChanged()
     val globalCamouflageSni: Flow<String> = context.dataStore.data.map { it[GLOBAL_CAMOUFLAGE_SNI] ?: "speedtest.net" }.distinctUntilChanged()
     val globalCamouflageHost: Flow<String> = context.dataStore.data.map { it[GLOBAL_CAMOUFLAGE_HOST] ?: "" }.distinctUntilChanged()
+    val globalCamouflageCustomIps: Flow<String> = context.dataStore.data.map { it[GLOBAL_CAMOUFLAGE_CUSTOM_IPS] ?: "" }.distinctUntilChanged()
+    val globalCamouflageTimeout: Flow<String> = context.dataStore.data.map { it[GLOBAL_CAMOUFLAGE_TIMEOUT] ?: "600" }.distinctUntilChanged()
 
     suspend fun setGlobalCamouflageEnabled(value: Boolean) { context.dataStore.edit { it[GLOBAL_CAMOUFLAGE_ENABLED] = value } }
     suspend fun setGlobalCamouflagePreset(value: String) { context.dataStore.edit { it[GLOBAL_CAMOUFLAGE_PRESET] = value } }
     suspend fun setGlobalCamouflageSni(value: String) { context.dataStore.edit { it[GLOBAL_CAMOUFLAGE_SNI] = value } }
     suspend fun setGlobalCamouflageHost(value: String) { context.dataStore.edit { it[GLOBAL_CAMOUFLAGE_HOST] = value } }
+    suspend fun setGlobalCamouflageCustomIps(value: String) { context.dataStore.edit { it[GLOBAL_CAMOUFLAGE_CUSTOM_IPS] = value } }
+    suspend fun setGlobalCamouflageTimeout(value: String) { context.dataStore.edit { it[GLOBAL_CAMOUFLAGE_TIMEOUT] = value } }
 
     val autoConnectSubs: Flow<Set<String>> = context.dataStore.data.map { it[AUTO_CONNECT_SUBS] ?: emptySet() }.distinctUntilChanged()
 
@@ -324,7 +334,9 @@ data class UserSettings(
     val globalCamouflageEnabled: Boolean,
     val globalCamouflagePreset: String,
     val globalCamouflageSni: String,
-    val globalCamouflageHost: String
+    val globalCamouflageHost: String,
+    val globalCamouflageCustomIps: String,
+    val globalCamouflageTimeout: String
 )
 
 data class Subscription(

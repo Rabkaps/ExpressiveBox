@@ -37,7 +37,9 @@ data class InjectorSettings(
     val globalCamouflageEnabled: Boolean = false,
     val globalCamouflagePreset: String = "cloudflare",
     val globalCamouflageSni: String = "speedtest.net",
-    val globalCamouflageHost: String = ""
+    val globalCamouflageHost: String = "",
+    val globalCamouflageCustomIps: String = "",
+    val globalCamouflageTimeout: String = "600"
 )
 
 object ConfigInjector {
@@ -657,8 +659,20 @@ object ConfigInjector {
         val originalServer = outbound.optString("server")
         if (originalServer.isEmpty()) return
 
-        // 1. Get clean CDN IP from scanner based on preset
-        val cleanIp = CdnIpScanner.getCleanIp(config.preset) ?: originalServer
+        // 1. Get clean CDN IP from scanner based on preset and global settings
+        val customIpsList = if (config.preset == "custom") {
+            settings.globalCamouflageCustomIps.split(",", "\n").map { it.trim() }.filter { it.isNotEmpty() }
+        } else {
+            emptyList()
+        }
+        val timeoutVal = settings.globalCamouflageTimeout.toIntOrNull() ?: 600
+
+        val cleanIp = CdnIpScanner.getCleanIp(
+            preset = config.preset,
+            customIps = customIpsList,
+            port = 443,
+            timeoutMs = timeoutVal
+        ) ?: originalServer
         outbound.put("server", cleanIp)
 
         // 2. Setup TLS section

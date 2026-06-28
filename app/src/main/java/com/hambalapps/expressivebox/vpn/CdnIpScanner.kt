@@ -5,6 +5,12 @@ import java.net.InetSocketAddress
 import java.net.Socket
 import java.util.concurrent.ConcurrentHashMap
 
+data class ScanResult(
+    val workingIpsCount: Int,
+    val fastestIp: String?,
+    val fastestLatencyMs: Long
+)
+
 object CdnIpScanner {
     private val cleanIpCache = ConcurrentHashMap<String, Pair<String, Long>>() // preset -> Pair(IP, timestamp)
     private val CACHE_DURATION_MS = 15 * 60 * 1000L // 15 minutes cache
@@ -20,48 +26,74 @@ object CdnIpScanner {
         "18.64.0.1", "18.65.0.1", "99.84.0.1", "99.86.0.1", "54.230.0.1"
     )
 
-    fun getCleanIp(preset: String): String? {
+    fun getCleanIp(
+        preset: String,
+        customIps: List<String> = emptyList(),
+        port: Int = 443,
+        timeoutMs: Int = 600
+    ): String? {
         val cached = cleanIpCache[preset]
         if (cached != null && (System.currentTimeMillis() - cached.second) < CACHE_DURATION_MS) {
             android.util.Log.i("ExpressiveBox", "Using cached clean IP for $preset: ${cached.first}")
             return cached.first
         }
 
-        val ips = when (preset) {
-            "cloudflare" -> CLOUDFLARE_IPS
-            "cloudfront" -> CLOUDFRONT_IPS
-            else -> return null
-        }
-
         android.util.Log.i("ExpressiveBox", "No cached IP for $preset. Running clean IP scan...")
         val cleanIp = runBlocking {
-            scanCleanIps(ips)
-        }
-        if (cleanIp != null) {
-            android.util.Log.i("ExpressiveBox", "Clean IP scan succeeded. Found best IP for $preset: $cleanIp")
-            cleanIpCache[preset] = Pair(cleanIp, System.currentTimeMillis())
-        } else {
-            android.util.Log.w("ExpressiveBox", "Clean IP scan failed for $preset. Falling back to default.")
+            val res = performScan(preset, customIps, port, timeoutMs)
+            res.fastestIp
         }
         return cleanIp
     }
 
-    private suspend fun scanCleanIps(ips: List<String>): String? = withContext(Dispatchers.IO) {
-        val jobs = ips.map { ip ->
-            async {
-                val startTime = System.currentTimeMillis()
-                try {
-                    Socket().use { socket ->
-                        socket.connect(InetSocketAddress(ip, 443), 600) // 600ms timeout
-                    }
-                    val latency = System.currentTimeMillis() - startTime
-                    Pair(ip, latency)
-                } catch (e: java.io.IOException) {
-                    null
-                }
+    suspend fun performScan(
+        preset: String,
+        customIps: List<String> = emptyList(),
+        port: Int = 443,
+        timeoutMs: Int = 600,
+        maxConcurrency: Int = 32
+    ): ScanResult {
+        val targetIps = if (preset == "custom" || customIps.isNotEmpty()) {
+            customIps.filter { it.trim().isNotEmpty() }
+        } else {
+            when (preset) {
+                "cloudflare" -> CLOUDFLARE_IPS
+                "cloudfront" -> CLOUDFRONT_IPS
+                else -> emptyList()
             }
         }
-        val results = jobs.awaitAll().filterNotNull().sortedBy { it.second }
-        results.firstOrNull()?.first
+
+        if (targetIps.isEmpty()) {
+            return ScanResult(0, null, -1L)
+        }
+
+        return withContext(Dispatchers.IO) {
+            val jobs = targetIps.map { ip ->
+                async {
+                    var result: Pair<String, Long>? = null
+                    val startTime = System.currentTimeMillis()
+                    try {
+                        Socket().use { socket ->
+                            socket.connect(InetSocketAddress(ip.trim(), port), timeoutMs)
+                        }
+                        val latency = System.currentTimeMillis() - startTime
+                        result = Pair(ip.trim(), latency)
+                    } catch (e: Exception) {
+                        // ignore
+                    }
+                    result
+                }
+            }
+            val results = jobs.awaitAll().filterNotNull().sortedBy { it.second }
+            val workingCount = results.size
+            val best = results.firstOrNull()
+            
+            if (best != null) {
+                cleanIpCache[preset] = Pair(best.first, System.currentTimeMillis())
+                ScanResult(workingCount, best.first, best.second)
+            } else {
+                ScanResult(workingCount, null, -1L)
+            }
+        }
     }
 }

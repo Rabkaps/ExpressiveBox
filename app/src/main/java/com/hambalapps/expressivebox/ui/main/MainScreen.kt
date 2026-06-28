@@ -2839,6 +2839,7 @@ fun MainScreen(
                                 colors = CardDefaults.cardColors(containerColor = Color.Transparent)
                             ) {
                                 VibrantCardContent(settings.cardStyle) {
+                                    var isScanningCamo by remember { mutableStateOf(false) }
                                     Column(modifier = Modifier.padding(16.dp)) {
                                         Row(
                                             modifier = Modifier.fillMaxWidth(),
@@ -2917,6 +2918,76 @@ fun MainScreen(
                                                         modifier = Modifier.fillMaxWidth(),
                                                         shape = ExpressiveButtonShape
                                                     )
+                                                    Spacer(modifier = Modifier.height(12.dp))
+                                                    OutlinedTextField(
+                                                        value = settings.globalCamouflageCustomIps,
+                                                        onValueChange = { scope.launch { settingsManager.setGlobalCamouflageCustomIps(it) } },
+                                                        label = { Text("Custom IP List (comma/line separated)") },
+                                                        placeholder = { Text("e.g. 104.16.85.20, 104.16.86.20") },
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        shape = ExpressiveButtonShape
+                                                    )
+                                                }
+
+                                                Spacer(modifier = Modifier.height(12.dp))
+                                                OutlinedTextField(
+                                                    value = settings.globalCamouflageTimeout,
+                                                    onValueChange = { scope.launch { settingsManager.setGlobalCamouflageTimeout(it) } },
+                                                    label = { Text("Scanner Timeout (ms)") },
+                                                    singleLine = true,
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    shape = ExpressiveButtonShape,
+                                                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number)
+                                                )
+
+                                                Spacer(modifier = Modifier.height(16.dp))
+                                                Button(
+                                                    onClick = {
+                                                        isScanningCamo = true
+                                                        scope.launch {
+                                                            val customIpsList = if (settings.globalCamouflagePreset == "custom") {
+                                                                settings.globalCamouflageCustomIps.split(",", "\n").map { it.trim() }.filter { it.isNotEmpty() }
+                                                            } else {
+                                                                emptyList()
+                                                            }
+                                                            val timeoutVal = settings.globalCamouflageTimeout.toIntOrNull() ?: 600
+                                                            
+                                                            val res = com.hambalapps.expressivebox.vpn.CdnIpScanner.performScan(
+                                                                preset = settings.globalCamouflagePreset,
+                                                                customIps = customIpsList,
+                                                                port = 443,
+                                                                timeoutMs = timeoutVal
+                                                            )
+                                                            
+                                                            isScanningCamo = false
+                                                            
+                                                            val msg = if (res.workingIpsCount > 0) {
+                                                                "Scan completed! Found ${res.workingIpsCount} clean CDN edge IPs. Best: ${res.fastestIp} (${res.fastestLatencyMs}ms)"
+                                                            } else {
+                                                                "Scan completed! No clean IPs found. Check connection or increase timeout."
+                                                            }
+                                                            android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
+                                                            if (vpnState == "CONNECTED") {
+                                                                startVpnService(context)
+                                                            }
+                                                        }
+                                                    },
+                                                    enabled = !isScanningCamo,
+                                                    modifier = Modifier.fillMaxWidth().pressScaleEffect(),
+                                                    shape = ExpressiveButtonShape
+                                                ) {
+                                                    if (isScanningCamo) {
+                                                        LoadingIndicator(
+                                                            modifier = Modifier.size(20.dp),
+                                                            color = MaterialTheme.colorScheme.onPrimary
+                                                        )
+                                                        Spacer(modifier = Modifier.width(8.dp))
+                                                        Text("Scanning CDN Edges...")
+                                                    } else {
+                                                        Icon(imageVector = Icons.Default.Speed, contentDescription = null)
+                                                        Spacer(modifier = Modifier.width(8.dp))
+                                                        Text("Scan Edges Now")
+                                                    }
                                                 }
                                             }
                                         }
