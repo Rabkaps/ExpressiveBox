@@ -53,6 +53,10 @@ class SettingsManager(private val context: Context) {
         val SHARE_VPN_PORT = stringPreferencesKey("share_vpn_port")
         val PROXY_CHAINS = stringPreferencesKey("proxy_chains")
         val CAMOUFLAGE_SETTINGS = stringPreferencesKey("camouflage_settings")
+        val GLOBAL_CAMOUFLAGE_ENABLED = booleanPreferencesKey("global_camouflage_enabled")
+        val GLOBAL_CAMOUFLAGE_PRESET = stringPreferencesKey("global_camouflage_preset")
+        val GLOBAL_CAMOUFLAGE_SNI = stringPreferencesKey("global_camouflage_sni")
+        val GLOBAL_CAMOUFLAGE_HOST = stringPreferencesKey("global_camouflage_host")
         
         private val defaultThemeKey = if (Config.IS_SPECIAL) "cherry_blossom" else "dynamic"
 
@@ -97,7 +101,11 @@ class SettingsManager(private val context: Context) {
             shareVpnPort = "10808",
             deserializedSubscriptions = emptyList(),
             proxyChains = "",
-            camouflageSettings = ""
+            camouflageSettings = "",
+            globalCamouflageEnabled = false,
+            globalCamouflagePreset = "cloudflare",
+            globalCamouflageSni = "speedtest.net",
+            globalCamouflageHost = ""
         )
     }
 
@@ -157,7 +165,11 @@ class SettingsManager(private val context: Context) {
             shareVpnPort = prefs[SHARE_VPN_PORT] ?: "10808",
             deserializedSubscriptions = deserialized,
             proxyChains = prefs[PROXY_CHAINS] ?: "",
-            camouflageSettings = prefs[CAMOUFLAGE_SETTINGS] ?: ""
+            camouflageSettings = prefs[CAMOUFLAGE_SETTINGS] ?: "",
+            globalCamouflageEnabled = prefs[GLOBAL_CAMOUFLAGE_ENABLED] ?: false,
+            globalCamouflagePreset = prefs[GLOBAL_CAMOUFLAGE_PRESET] ?: "cloudflare",
+            globalCamouflageSni = prefs[GLOBAL_CAMOUFLAGE_SNI] ?: "speedtest.net",
+            globalCamouflageHost = prefs[GLOBAL_CAMOUFLAGE_HOST] ?: ""
         )
     }.distinctUntilChanged()
 
@@ -243,6 +255,16 @@ class SettingsManager(private val context: Context) {
     suspend fun setShareVpnLan(value: Boolean) { context.dataStore.edit { it[SHARE_VPN_LAN] = value } }
     suspend fun setShareVpnPort(value: String) { context.dataStore.edit { it[SHARE_VPN_PORT] = value } }
 
+    val globalCamouflageEnabled: Flow<Boolean> = context.dataStore.data.map { it[GLOBAL_CAMOUFLAGE_ENABLED] ?: false }.distinctUntilChanged()
+    val globalCamouflagePreset: Flow<String> = context.dataStore.data.map { it[GLOBAL_CAMOUFLAGE_PRESET] ?: "cloudflare" }.distinctUntilChanged()
+    val globalCamouflageSni: Flow<String> = context.dataStore.data.map { it[GLOBAL_CAMOUFLAGE_SNI] ?: "speedtest.net" }.distinctUntilChanged()
+    val globalCamouflageHost: Flow<String> = context.dataStore.data.map { it[GLOBAL_CAMOUFLAGE_HOST] ?: "" }.distinctUntilChanged()
+
+    suspend fun setGlobalCamouflageEnabled(value: Boolean) { context.dataStore.edit { it[GLOBAL_CAMOUFLAGE_ENABLED] = value } }
+    suspend fun setGlobalCamouflagePreset(value: String) { context.dataStore.edit { it[GLOBAL_CAMOUFLAGE_PRESET] = value } }
+    suspend fun setGlobalCamouflageSni(value: String) { context.dataStore.edit { it[GLOBAL_CAMOUFLAGE_SNI] = value } }
+    suspend fun setGlobalCamouflageHost(value: String) { context.dataStore.edit { it[GLOBAL_CAMOUFLAGE_HOST] = value } }
+
     val autoConnectSubs: Flow<Set<String>> = context.dataStore.data.map { it[AUTO_CONNECT_SUBS] ?: emptySet() }.distinctUntilChanged()
 
     suspend fun toggleAutoConnectSub(subId: String) {
@@ -298,7 +320,11 @@ data class UserSettings(
     val shareVpnPort: String,
     val deserializedSubscriptions: List<Subscription>,
     val proxyChains: String,
-    val camouflageSettings: String
+    val camouflageSettings: String,
+    val globalCamouflageEnabled: Boolean,
+    val globalCamouflagePreset: String,
+    val globalCamouflageSni: String,
+    val globalCamouflageHost: String
 )
 
 data class Subscription(

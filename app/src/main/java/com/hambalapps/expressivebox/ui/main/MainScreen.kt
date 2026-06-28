@@ -2829,6 +2829,102 @@ fun MainScreen(
                             }
                             
                             Spacer(modifier = Modifier.height(16.dp))
+
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(brush = primaryCardBrush, shape = ExpressiveCardShape)
+                                    .border(width = 1.dp, brush = cardBorderBrush, shape = ExpressiveCardShape),
+                                shape = ExpressiveCardShape,
+                                colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+                            ) {
+                                VibrantCardContent(settings.cardStyle) {
+                                    Column(modifier = Modifier.padding(16.dp)) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(Icons.Default.Security, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                                Spacer(modifier = Modifier.width(12.dp))
+                                                Column {
+                                                    Text(stringResource(R.string.camouflage_settings), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                                                    Text("Dynamic domain-fronting with clean CDN IP scanning", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                }
+                                            }
+                                            Switch(
+                                                checked = settings.globalCamouflageEnabled,
+                                                onCheckedChange = { scope.launch { settingsManager.setGlobalCamouflageEnabled(it); if (vpnState == "CONNECTED") startVpnService(context) } }
+                                            )
+                                        }
+
+                                        AnimatedVisibility(visible = settings.globalCamouflageEnabled) {
+                                            Column(modifier = Modifier.fillMaxWidth()) {
+                                                Spacer(modifier = Modifier.height(12.dp))
+                                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                                                Spacer(modifier = Modifier.height(12.dp))
+
+                                                Text(
+                                                    text = stringResource(R.string.camouflage_preset),
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.primary
+                                                )
+                                                Spacer(modifier = Modifier.height(8.dp))
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                                ) {
+                                                    listOf("cloudflare" to "Cloudflare", "cloudfront" to "Cloudfront", "custom" to "Custom").forEach { (presetVal, label) ->
+                                                        FilterChip(
+                                                            selected = settings.globalCamouflagePreset == presetVal,
+                                                            onClick = {
+                                                                scope.launch {
+                                                                    settingsManager.setGlobalCamouflagePreset(presetVal)
+                                                                    if (presetVal == "cloudflare") {
+                                                                        settingsManager.setGlobalCamouflageSni("speedtest.net")
+                                                                        settingsManager.setGlobalCamouflageHost("speedtest.net")
+                                                                    } else if (presetVal == "cloudfront") {
+                                                                        settingsManager.setGlobalCamouflageSni("aws.amazon.com")
+                                                                        settingsManager.setGlobalCamouflageHost("aws.amazon.com")
+                                                                    }
+                                                                    if (vpnState == "CONNECTED") startVpnService(context)
+                                                                }
+                                                            },
+                                                            label = { Text(label) },
+                                                            shape = ExpressiveButtonShape
+                                                        )
+                                                    }
+                                                }
+
+                                                if (settings.globalCamouflagePreset == "custom") {
+                                                    Spacer(modifier = Modifier.height(12.dp))
+                                                    OutlinedTextField(
+                                                        value = settings.globalCamouflageSni,
+                                                        onValueChange = { scope.launch { settingsManager.setGlobalCamouflageSni(it) } },
+                                                        label = { Text(stringResource(R.string.custom_sni)) },
+                                                        singleLine = true,
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        shape = ExpressiveButtonShape
+                                                    )
+                                                    Spacer(modifier = Modifier.height(12.dp))
+                                                    OutlinedTextField(
+                                                        value = settings.globalCamouflageHost,
+                                                        onValueChange = { scope.launch { settingsManager.setGlobalCamouflageHost(it) } },
+                                                        label = { Text(stringResource(R.string.custom_host)) },
+                                                        singleLine = true,
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        shape = ExpressiveButtonShape
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(16.dp))
                             
                             Card(
                                 modifier = Modifier

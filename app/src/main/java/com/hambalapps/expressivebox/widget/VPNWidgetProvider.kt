@@ -87,10 +87,15 @@ class VPNWidgetProvider : AppWidgetProvider() {
                     else -> "UNPROTECTED"
                 }
 
+                val contextThemeWrapper = android.view.ContextThemeWrapper(context, R.style.Theme_ExpressiveBox)
+                val colorAccent = resolveThemeColor(contextThemeWrapper, android.R.attr.colorAccent, 0xFF00E5FF.toInt())
+                val textColorSecondary = resolveThemeColor(contextThemeWrapper, android.R.attr.textColorSecondary, 0xFF9E9E9E.toInt())
+                val textColorPrimary = resolveThemeColor(contextThemeWrapper, android.R.attr.textColorPrimary, 0xFFFFFFFF.toInt())
+
                 val statusColor = when (lastVpnState) {
-                    "CONNECTED" -> 0xFF00E5FF.toInt()
+                    "CONNECTED" -> colorAccent
                     "CONNECTING" -> 0xFFFF9100.toInt()
-                    else -> 0xFF9E9E9E.toInt()
+                    else -> textColorSecondary
                 }
 
                 val bgDrawable = when (lastVpnState) {
@@ -123,9 +128,9 @@ class VPNWidgetProvider : AppWidgetProvider() {
                     views.setInt(R.id.widget_container, "setBackgroundResource", bgDrawable)
                     
                     val iconTintColor = when (lastVpnState) {
-                        "CONNECTED" -> 0xFF00E5FF.toInt()
+                        "CONNECTED" -> colorAccent
                         "CONNECTING" -> 0xFFFF9100.toInt()
-                        else -> 0xFFFFFFFF.toInt()
+                        else -> textColorPrimary
                     }
                     views.setInt(R.id.widget_button_toggle, "setColorFilter", iconTintColor)
 
@@ -155,6 +160,19 @@ class VPNWidgetProvider : AppWidgetProvider() {
             } finally {
                 pendingResult.finish()
             }
+        }
+    }
+
+    private fun resolveThemeColor(context: Context, attrId: Int, fallbackColor: Int): Int {
+        return try {
+            val typedValue = android.util.TypedValue()
+            if (context.theme.resolveAttribute(attrId, typedValue, true)) {
+                typedValue.data
+            } else {
+                fallbackColor
+            }
+        } catch (e: Exception) {
+            fallbackColor
         }
     }
 }

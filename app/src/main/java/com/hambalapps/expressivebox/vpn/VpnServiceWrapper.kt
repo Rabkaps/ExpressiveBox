@@ -481,6 +481,10 @@ class VpnServiceWrapper : VpnService(), PlatformInterface, CommandServerHandler 
                 val shareVpnPortVal = settingsManager.settings.first().shareVpnPort
                 val proxyChainsVal = settingsManager.proxyChains.first()
                 val camouflageSettingsVal = settingsManager.camouflageSettings.first()
+                val globalCamouflageEnabledVal = settingsManager.globalCamouflageEnabled.first()
+                val globalCamouflagePresetVal = settingsManager.globalCamouflagePreset.first()
+                val globalCamouflageSniVal = settingsManager.globalCamouflageSni.first()
+                val globalCamouflageHostVal = settingsManager.globalCamouflageHost.first()
                 splitTunnelingEnabledVal = settingsManager.splitTunnelingEnabled.first()
                 splitTunnelingModeVal = settingsManager.splitTunnelingMode.first()
                 splitTunnelingAppsVal = settingsManager.splitTunnelingApps.first()
@@ -505,7 +509,11 @@ class VpnServiceWrapper : VpnService(), PlatformInterface, CommandServerHandler 
                     shareVpnLan = shareVpnLanVal,
                     shareVpnPort = shareVpnPortVal,
                     proxyChains = proxyChainsVal,
-                    camouflageSettings = camouflageSettingsVal
+                    camouflageSettings = camouflageSettingsVal,
+                    globalCamouflageEnabled = globalCamouflageEnabledVal,
+                    globalCamouflagePreset = globalCamouflagePresetVal,
+                    globalCamouflageSni = globalCamouflageSniVal,
+                    globalCamouflageHost = globalCamouflageHostVal
                 )
 
                 // Inject our custom bypass-Iran rules, split DNS, and advanced parameters

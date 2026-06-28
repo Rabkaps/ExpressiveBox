@@ -33,7 +33,11 @@ data class InjectorSettings(
     val shareVpnLan: Boolean = false,
     val shareVpnPort: String = "10808",
     val proxyChains: String = "",
-    val camouflageSettings: String = ""
+    val camouflageSettings: String = "",
+    val globalCamouflageEnabled: Boolean = false,
+    val globalCamouflagePreset: String = "cloudflare",
+    val globalCamouflageSni: String = "speedtest.net",
+    val globalCamouflageHost: String = ""
 )
 
 object ConfigInjector {
@@ -566,15 +570,30 @@ object ConfigInjector {
             if (tag == "block") hasBlock = true
 
             // Resolve and apply Stealth Camouflage if configured
-            val originalLink = out.optString("_original_link")
-            if (originalLink.isNotEmpty()) {
-                val configLinkWithoutRemark = originalLink.substringBefore("#")
-                val camConfig = camConfigs.find { it.nodeLink.substringBefore("#") == configLinkWithoutRemark }
-                if (camConfig != null && camConfig.enabled) {
-                    applyCamouflage(out, camConfig, settings)
+            val isProxyOutbound = tag == "proxy" || tag == "relay-out"
+            val isCompatibleType = type == "vless" || type == "trojan" || type == "vmess" || type == "shadowsocks" || type == "ss"
+            if (isProxyOutbound && isCompatibleType) {
+                if (settings.globalCamouflageEnabled) {
+                    val globalConfig = CamouflageConfig(
+                        nodeLink = "",
+                        enabled = true,
+                        preset = settings.globalCamouflagePreset,
+                        customSni = settings.globalCamouflageSni,
+                        customHost = settings.globalCamouflageHost
+                    )
+                    applyCamouflage(out, globalConfig, settings)
+                } else {
+                    val originalLink = out.optString("_original_link")
+                    if (originalLink.isNotEmpty()) {
+                        val configLinkWithoutRemark = originalLink.substringBefore("#")
+                        val camConfig = camConfigs.find { it.nodeLink.substringBefore("#") == configLinkWithoutRemark }
+                        if (camConfig != null && camConfig.enabled) {
+                            applyCamouflage(out, camConfig, settings)
+                        }
+                    }
                 }
-                out.remove("_original_link") // Clean up temporary key
             }
+            out.remove("_original_link") // Clean up temporary key
 
             // Inject fragmentation into proxy outbound if enabled
             if (tag == "proxy" && settings.enableFragment) {
