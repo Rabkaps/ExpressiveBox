@@ -2068,8 +2068,8 @@ fun MainScreen(
                                             shape = ExpressiveButtonShape
                                         ) {
                                             Icon(imageVector = Icons.Default.AddLink, contentDescription = null)
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                            Text(stringResource(R.string.import_str), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(stringResource(R.string.import_str))
                                         }
                                         Button(
                                             onClick = {
@@ -2088,19 +2088,8 @@ fun MainScreen(
                                             shape = ExpressiveButtonShape
                                         ) {
                                             Icon(imageVector = Icons.Default.AddCircle, contentDescription = null)
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                            Text(stringResource(R.string.create_str), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                        }
-                                        OutlinedButton(
-                                            onClick = {
-                                                editingNodeLink = "new_chain"
-                                            },
-                                            modifier = Modifier.weight(1f).pressScaleEffect(),
-                                            shape = ExpressiveButtonShape
-                                        ) {
-                                            Icon(imageVector = Icons.Default.Link, contentDescription = null)
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                            Text(stringResource(R.string.chain_str), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(stringResource(R.string.create_str))
                                         }
                                     }
                                 }
@@ -2553,42 +2542,60 @@ fun MainScreen(
                             }
                         }
 
-                        if (isLandscape) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                                horizontalArrangement = Arrangement.spacedBy(16.dp)
-                            ) {
-                                subscriptionManagerCard(
-                                    Modifier.weight(1.1f).fillMaxHeight(),
-                                    Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())
-                                )
-                                availableNodesCard(
-                                    Modifier.weight(1f).fillMaxHeight(),
-                                    Modifier.fillMaxWidth().weight(1f)
-                                )
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            if (isLandscape) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                                ) {
+                                    subscriptionManagerCard(
+                                        Modifier.weight(1.1f).fillMaxHeight(),
+                                        Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())
+                                    )
+                                    availableNodesCard(
+                                        Modifier.weight(1f).fillMaxHeight(),
+                                        Modifier.fillMaxWidth().weight(1f)
+                                    )
+                                }
+                            } else {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(horizontal = 16.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    subscriptionManagerCard(
+                                        Modifier.fillMaxWidth(),
+                                        Modifier.fillMaxWidth().heightIn(max = 140.dp).verticalScroll(rememberScrollState())
+                                    )
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    availableNodesCard(
+                                        Modifier.fillMaxWidth().weight(1f),
+                                        Modifier.fillMaxWidth().weight(1f)
+                                    )
+                                }
                             }
-                        } else {
-                            Column(
+
+                            androidx.compose.material3.ExtendedFloatingActionButton(
+                                onClick = { editingNodeLink = "new_chain" },
                                 modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(horizontal = 16.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
+                                    .align(Alignment.BottomEnd)
+                                    .padding(16.dp)
+                                    .pressScaleEffect(),
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = MaterialTheme.colorScheme.onPrimary,
+                                shape = ExpressiveButtonShape
                             ) {
-                                Spacer(modifier = Modifier.height(16.dp))
-                                subscriptionManagerCard(
-                                    Modifier.fillMaxWidth(),
-                                    Modifier.fillMaxWidth().heightIn(max = 140.dp).verticalScroll(rememberScrollState())
-                                )
-                                Spacer(modifier = Modifier.height(16.dp))
-                                availableNodesCard(
-                                    Modifier.fillMaxWidth().weight(1f),
-                                    Modifier.fillMaxWidth().weight(1f)
-                                )
+                                Icon(imageVector = Icons.Default.Link, contentDescription = null)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(stringResource(R.string.chain_str))
                             }
                         }
-                    }                    2 -> { // Logs Tab
+                    }
+                    2 -> { // Logs Tab
                         Column(
                             modifier = Modifier
                                 .fillMaxSize()

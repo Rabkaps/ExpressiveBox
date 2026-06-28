@@ -88,9 +88,15 @@ class VPNWidgetProvider : AppWidgetProvider() {
                 }
 
                 val statusColor = when (lastVpnState) {
-                    "CONNECTED" -> 0xFF624FBE.toInt()
-                    "CONNECTING" -> 0xFFD03A60.toInt()
-                    else -> 0xFF808080.toInt()
+                    "CONNECTED" -> 0xFF00E5FF.toInt()
+                    "CONNECTING" -> 0xFFFF9100.toInt()
+                    else -> 0xFF9E9E9E.toInt()
+                }
+
+                val bgDrawable = when (lastVpnState) {
+                    "CONNECTED" -> R.drawable.widget_background_connected
+                    "CONNECTING" -> R.drawable.widget_background_connecting
+                    else -> R.drawable.widget_background
                 }
 
                 val nodeName = if (activeProfile.isNotEmpty()) {
@@ -114,14 +120,16 @@ class VPNWidgetProvider : AppWidgetProvider() {
                     views.setTextViewText(R.id.widget_status, stateText)
                     views.setTextColor(R.id.widget_status, statusColor)
                     views.setTextViewText(R.id.widget_node_name, nodeName)
+                    views.setInt(R.id.widget_container, "setBackgroundResource", bgDrawable)
                     
                     val iconTintColor = when (lastVpnState) {
-                        "CONNECTED" -> 0xFF80C5FF.toInt()
-                        "CONNECTING" -> 0xFFFFD54F.toInt()
+                        "CONNECTED" -> 0xFF00E5FF.toInt()
+                        "CONNECTING" -> 0xFFFF9100.toInt()
                         else -> 0xFFFFFFFF.toInt()
                     }
                     views.setInt(R.id.widget_button_toggle, "setColorFilter", iconTintColor)
 
+                    // Toggle Intent (Broadcast receiver)
                     val toggleIntent = Intent(context, VPNWidgetProvider::class.java).apply {
                         action = ACTION_TOGGLE
                     }
@@ -132,6 +140,13 @@ class VPNWidgetProvider : AppWidgetProvider() {
                     }
                     val pi = PendingIntent.getBroadcast(context, 0, toggleIntent, flag)
                     views.setOnClickPendingIntent(R.id.widget_button_toggle, pi)
+
+                    // App launch Intent (Open MainActivity)
+                    val mainIntent = Intent(context, com.hambalapps.expressivebox.MainActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    }
+                    val mainPi = PendingIntent.getActivity(context, 1, mainIntent, flag)
+                    views.setOnClickPendingIntent(R.id.widget_container, mainPi)
 
                     manager.updateAppWidget(id, views)
                 }
