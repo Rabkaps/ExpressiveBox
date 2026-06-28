@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.12] - 2026-06-28
+
+### Added
+- **Visual Multi-Hop Chains (Proxy Cascading)**: Added Chain Builder visual UI Dialog, allowing user selection of relay (first-hop) and exit (second-hop) servers. Implemented sing-box native Detour configuration mapping to route connection securely across multiple jumps.
+- **Stealth Camouflage Presets & Clean IP Scanner**: Designed a background concurrent TCP connect scanner (`CdnIpScanner`) utilizing parallel coroutine probes with short timeouts (600ms) to resolve the fastest unblocked CDN edge IPs. Configured whitelisted SNI masquerading (Cloudflare/Cloudfront presets) and transport Host header routing rewrites.
+- **Local Proxy Server Sharing (LAN Server)**: Implemented an HTTP/Socks5 combined JNI inbound proxy listener allowing connection sharing to other local devices.
+- **Real-Time Bandwidth Speed Graph**: Visual speed history tracker drawing download and upload speeds over a rolling cubic-bezier wave canvas.
+- **Material 3 Expressive Widget**: RemoteViews home screen widget with custom FrameLayout layout, support for real-time connection status sync, and PendingIntent-based state toggling.
+
+### Fixed
+- **Bypass Iran Routing Order**: Corrected routing hierarchies inside `ConfigInjector.kt` so that DNS Hijacking, LAN bypass, and Iran bypass rules are placed at the beginning of the rules array, preventing the catch-all proxy rule from overriding them.
+- **Deduplicated LazyColumn Item Keys**: Modified node listing keys in `MainScreen.kt` to use `key = { index, item -> "${item.link}_$index" }` preventing duplicate key crashes when identical links are loaded.
+- **RemoteViews Layout Crash**: Replaced unsupported generic `<View>` elements inside widget layouts with `<FrameLayout>` to prevent widget inflation crashes on newer Android devices.
+- **Auto-Update Lockouts**: Patched subscription update lockouts in `MainScreen.kt` to prevent locking out subsequent retries on network failures.
+
 ## [1.5.0] - 2026-06-19
 
 ### Added

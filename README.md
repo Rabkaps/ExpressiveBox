@@ -15,21 +15,33 @@ ExpressiveBox is a modern, high-performance VPN client for Android built entirel
 * **Asymmetric Corner Design**: Implements the Material 3 Expressive (MD3E) styling guide using dynamic asymmetric rounded shapes (`ExpressiveCardShape`, `ExpressiveButtonShape`, `ExpressiveChipShape`) for all cards, dialogs, buttons, text fields, and list items.
 * **Animated Wavy Indicators**: Features a custom-rendered `CircularWavyProgressIndicator` that animates smoothly during connection/disconnection states.
 * **Interactive Wave Visualizer**: Includes a real-time `Canvas`-based wave visualizer that flows dynamically when the VPN connection is active.
+* **Real-Time Bandwidth Speed Graph**: Embedded visual rolling speed graph plotting download and upload speed history using a smooth cubic-bezier wave canvas.
 * **Tactile Press-Scale Effects**: Custom physics-based scale-press feedback on all interactive components for a premium feel.
 
-### 🔌 Multi-Protocol & Manual Configuration
-* **Extended Protocol Support**: Full routing capabilities for VLESS, Trojan, Shadowsocks, SOCKS5, HTTP, and HTTPS (with TLS/SNI injection).
-* **Manual Node Creator & Form Editor**: Create nodes from scratch or edit existing ones using a comprehensive form editor (supporting protocol, remark, host, port, credentials/UUID, TLS toggles, and SNI names) or a raw config editor.
-* **QR Code Scanner**: Fast configuration import by scanning QR codes using the device camera (powered by Android CameraX and Google ML Kit).
+### ⛓️ Visual Multi-Hop Chains (Proxy Cascading)
+* **Double-Hop Relaying**: Connect to the internet through a chain of two proxy servers (Device ➔ Relay Server ➔ Exit Destination ➔ Internet).
+* **Native Detour Integration**: Configured utilizing sing-box's native outbound `"detour"` parameters (routing the exit outbound `"proxy"` through the relay outbound `"relay-out"`).
+* **Visual Chain Builder**: Create and edit chains visually using a custom Compose dropdown interface with circular-routing prevention.
 
-### ⚡ Traffic Stats & Routing Options
-* **Real Traffic Speed Monitoring**: Displays live upload and download rates on the dashboard computed every second using system-level `android.net.TrafficStats`.
-* **Automated Iran Routing**: Built-in rules for automatic identification of domestic Iranian domains and IP ranges (`geoip-ir`/`geosite-ir`), routing them directly (bypassing the VPN) to guarantee optimal speeds for domestic banking and services.
+### 🕵️ Stealth Camouflage (Domain Fronting & Clean IP Scanner)
+* **Masquerading & Fronting**: Bypasses SNI-based deep-packet inspection (DPI) by replacing target IP addresses with clean CDN endpoints and masquerading the SNI name under whitelisted domains.
+* **Clean IP Scanner**: Uses an asynchronous parallel TCP connect prober (`CdnIpScanner`) with active socket validation to discover the fastest unblocked CDN edge IPs in real-time.
+* **Presets & Custom Profiles**: Built-in presets for Cloudflare (SNI: `speedtest.net`) and Cloudfront (SNI: `aws.amazon.com`) networks, alongside custom Host header rewrites.
+
+### 🔌 Sharing & Multi-Protocol Configuration
+* **Local Proxy Sharing (LAN Server)**: Share the active VPN tunnel with other local network clients (smart TVs, consoles, PCs) via an HTTP/Socks5 combined JNI inbound proxy listener on a customizable port.
+* **Extended Protocol Support**: Full routing capabilities for VLESS, Trojan, Shadowsocks, SOCKS5, HTTP, and HTTPS (with TLS/SNI injection).
+* **Manual Node Creator & Form Editor**: Create nodes from scratch or edit existing ones using a comprehensive form editor or a raw config editor.
+* **QR Code Scanner**: Fast configuration import by scanning QR codes using the device camera (powered by CameraX and ML Kit).
+
+### ⚡ Advanced Routing Options
+* **Automated Iran Routing**: Built-in rules for automatic identification of domestic Iranian domains and IP ranges (`geoip-ir`/`geosite-ir`), routing them directly (bypassing the VPN) to guarantee optimal speeds.
 * **Bypass LAN**: Toggle option to bypass local area network traffic (private subnets like `192.168.x.x`, `10.x.x.x`), keeping local printer/router connections direct.
 
 ### 🔄 Subscriptions & Updates
 * **Scheduled Auto-Updates**: Auto-update subscription lists silently on app startup, daily, or weekly, with manual pull-to-refresh buttons.
 * **Smart Active Profile Selection**: Automatically switches to the first available backup node of a subscription if the current active server is modified or deleted during an update.
+
 
 ---
 
