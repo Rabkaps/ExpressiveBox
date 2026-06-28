@@ -88,20 +88,36 @@ class VPNWidgetProvider : AppWidgetProvider() {
                 }
 
                 val contextThemeWrapper = android.view.ContextThemeWrapper(context, R.style.Theme_ExpressiveBox)
-                val colorAccent = resolveThemeColor(contextThemeWrapper, android.R.attr.colorAccent, 0xFF00E5FF.toInt())
-                val textColorSecondary = resolveThemeColor(contextThemeWrapper, android.R.attr.textColorSecondary, 0xFF9E9E9E.toInt())
-                val textColorPrimary = resolveThemeColor(contextThemeWrapper, android.R.attr.textColorPrimary, 0xFFFFFFFF.toInt())
+                val colorPrimary = resolveCustomThemeColor(contextThemeWrapper, "colorPrimary", 0xFF00E5FF.toInt())
+                val colorSecondary = resolveCustomThemeColor(contextThemeWrapper, "colorSecondary", 0xFFFF9100.toInt())
+                val colorOutline = resolveCustomThemeColor(contextThemeWrapper, "colorOutline", 0xFF9E9E9E.toInt())
+
+                val onPrimaryContainer = resolveCustomThemeColor(contextThemeWrapper, "onPrimaryContainer", 0xFF000000.toInt())
+                val onSecondaryContainer = resolveCustomThemeColor(contextThemeWrapper, "onSecondaryContainer", 0xFF000000.toInt())
+                val onSurfaceVariant = resolveCustomThemeColor(contextThemeWrapper, "onSurfaceVariant", 0xFFFFFFFF.toInt())
 
                 val statusColor = when (lastVpnState) {
-                    "CONNECTED" -> colorAccent
-                    "CONNECTING" -> 0xFFFF9100.toInt()
-                    else -> textColorSecondary
+                    "CONNECTED" -> colorPrimary
+                    "CONNECTING" -> colorSecondary
+                    else -> colorOutline
                 }
 
                 val bgDrawable = when (lastVpnState) {
                     "CONNECTED" -> R.drawable.widget_background_connected
                     "CONNECTING" -> R.drawable.widget_background_connecting
                     else -> R.drawable.widget_background
+                }
+
+                val toggleBgDrawable = when (lastVpnState) {
+                    "CONNECTED" -> R.drawable.widget_button_background_connected
+                    "CONNECTING" -> R.drawable.widget_button_background_connecting
+                    else -> R.drawable.widget_button_background
+                }
+
+                val iconTintColor = when (lastVpnState) {
+                    "CONNECTED" -> onPrimaryContainer
+                    "CONNECTING" -> onSecondaryContainer
+                    else -> onSurfaceVariant
                 }
 
                 val nodeName = if (activeProfile.isNotEmpty()) {
@@ -126,12 +142,7 @@ class VPNWidgetProvider : AppWidgetProvider() {
                     views.setTextColor(R.id.widget_status, statusColor)
                     views.setTextViewText(R.id.widget_node_name, nodeName)
                     views.setInt(R.id.widget_container, "setBackgroundResource", bgDrawable)
-                    
-                    val iconTintColor = when (lastVpnState) {
-                        "CONNECTED" -> colorAccent
-                        "CONNECTING" -> 0xFFFF9100.toInt()
-                        else -> textColorPrimary
-                    }
+                    views.setInt(R.id.widget_button_toggle, "setBackgroundResource", toggleBgDrawable)
                     views.setInt(R.id.widget_button_toggle, "setColorFilter", iconTintColor)
 
                     // Toggle Intent (Broadcast receiver)
@@ -174,5 +185,11 @@ class VPNWidgetProvider : AppWidgetProvider() {
         } catch (e: Exception) {
             fallbackColor
         }
+    }
+
+    private fun resolveCustomThemeColor(context: Context, attrName: String, fallbackColor: Int): Int {
+        val attrId = context.resources.getIdentifier(attrName, "attr", context.packageName)
+        if (attrId == 0) return fallbackColor
+        return resolveThemeColor(context, attrId, fallbackColor)
     }
 }
