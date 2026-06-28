@@ -25,6 +25,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -51,6 +53,57 @@ import java.net.URLDecoder
 private val ExpressiveCardShape = RoundedCornerShape(topStart = 24.dp, bottomEnd = 24.dp, topEnd = 8.dp, bottomStart = 8.dp)
 private val ExpressiveButtonShape = RoundedCornerShape(topStart = 12.dp, bottomEnd = 12.dp, topEnd = 4.dp, bottomStart = 4.dp)
 private val ExpressiveChipShape = RoundedCornerShape(topStart = 8.dp, bottomEnd = 8.dp, topEnd = 2.dp, bottomStart = 2.dp)
+
+@Composable
+fun VibrantCardContent(
+    cardStyle: String,
+    content: @Composable () -> Unit
+) {
+    if (cardStyle == "vibrant") {
+        val onPrimaryContainer = MaterialTheme.colorScheme.onPrimaryContainer
+        val cardBackground = MaterialTheme.colorScheme.primaryContainer
+        MaterialTheme(
+            colorScheme = MaterialTheme.colorScheme.copy(
+                primary = onPrimaryContainer,
+                onPrimary = cardBackground,
+                primaryContainer = onPrimaryContainer.copy(alpha = 0.20f),
+                onPrimaryContainer = onPrimaryContainer,
+                
+                secondary = onPrimaryContainer,
+                onSecondary = cardBackground,
+                secondaryContainer = onPrimaryContainer,
+                onSecondaryContainer = cardBackground,
+                
+                tertiary = onPrimaryContainer,
+                onTertiary = cardBackground,
+                tertiaryContainer = onPrimaryContainer.copy(alpha = 0.20f),
+                onTertiaryContainer = onPrimaryContainer,
+                
+                surface = cardBackground,
+                onSurface = onPrimaryContainer,
+                onSurfaceVariant = onPrimaryContainer.copy(alpha = 0.80f),
+                surfaceVariant = onPrimaryContainer.copy(alpha = 0.15f),
+                
+                outline = onPrimaryContainer.copy(alpha = 0.45f),
+                outlineVariant = onPrimaryContainer.copy(alpha = 0.25f),
+                onError = Color.White,
+                
+                surfaceContainerLowest = onPrimaryContainer.copy(alpha = 0.05f),
+                surfaceContainerLow = onPrimaryContainer.copy(alpha = 0.10f),
+                surfaceContainer = onPrimaryContainer.copy(alpha = 0.15f),
+                surfaceContainerHigh = onPrimaryContainer.copy(alpha = 0.20f),
+                surfaceContainerHighest = onPrimaryContainer.copy(alpha = 0.25f)
+            )
+        ) {
+            CompositionLocalProvider(
+                LocalContentColor provides MaterialTheme.colorScheme.onSurface,
+                content = content
+            )
+        }
+    } else {
+        content()
+    }
+}
 
 object DesktopStrings {
     private val fa = mapOf(
@@ -194,6 +247,139 @@ fun MainScreen() {
 
     var currentScreen by remember { mutableStateOf("dashboard") }
 
+    val isDark = when (settings.themeMode) {
+        "light" -> false
+        "dark" -> true
+        else -> isSystemInDarkTheme()
+    }
+    val cardStyle = settings.cardStyle
+
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val secondaryColor = MaterialTheme.colorScheme.secondary
+    val tertiaryColor = MaterialTheme.colorScheme.tertiary
+    val surfaceContainerHigh = MaterialTheme.colorScheme.surfaceContainerHigh
+    val surfaceContainer = MaterialTheme.colorScheme.surfaceContainer
+    val surfaceContainerLow = MaterialTheme.colorScheme.surfaceContainerLow
+    val primaryContainer = MaterialTheme.colorScheme.primaryContainer
+    val outlineVariant = MaterialTheme.colorScheme.outlineVariant
+
+    val cardBorderBrush = remember(isDark, cardStyle, primaryColor, secondaryColor, outlineVariant) {
+        if (cardStyle == "solid" || cardStyle == "vibrant") {
+            SolidColor(outlineVariant)
+        } else {
+            val colors = listOf(
+                primaryColor.copy(alpha = if (isDark) 0.60f else 0.18f),
+                secondaryColor.copy(alpha = if (isDark) 0.40f else 0.06f)
+            )
+            Brush.linearGradient(colors = colors)
+        }
+    }
+
+    val primaryCardBrush = remember(isDark, cardStyle, primaryColor, secondaryColor, surfaceContainerHigh, primaryContainer) {
+        if (cardStyle == "solid") {
+            SolidColor(surfaceContainerHigh)
+        } else if (cardStyle == "vibrant") {
+            SolidColor(primaryContainer)
+        } else {
+            val colors = if (isDark) {
+                listOf(
+                    primaryColor.copy(alpha = 0.55f),
+                    secondaryColor.copy(alpha = 0.28f)
+                )
+            } else {
+                listOf(
+                    primaryColor.copy(alpha = 0.18f),
+                    surfaceContainerHigh
+                )
+            }
+            Brush.linearGradient(colors = colors)
+        }
+    }
+
+    val secondaryCardBrush = remember(isDark, cardStyle, secondaryColor, tertiaryColor, surfaceContainer, primaryContainer) {
+        if (cardStyle == "solid") {
+            SolidColor(surfaceContainer)
+        } else if (cardStyle == "vibrant") {
+            SolidColor(primaryContainer)
+        } else {
+            val colors = if (isDark) {
+                listOf(
+                    secondaryColor.copy(alpha = 0.55f),
+                    tertiaryColor.copy(alpha = 0.28f)
+                )
+            } else {
+                listOf(
+                    secondaryColor.copy(alpha = 0.18f),
+                    surfaceContainerHigh
+                )
+            }
+            Brush.linearGradient(colors = colors)
+        }
+    }
+
+    val tertiaryCardBrush = remember(isDark, cardStyle, tertiaryColor, primaryColor, surfaceContainerLow, primaryContainer) {
+        if (cardStyle == "solid") {
+            SolidColor(surfaceContainerLow)
+        } else if (cardStyle == "vibrant") {
+            SolidColor(primaryContainer)
+        } else {
+            val colors = if (isDark) {
+                listOf(
+                    tertiaryColor.copy(alpha = 0.55f),
+                    primaryColor.copy(alpha = 0.28f)
+                )
+            } else {
+                listOf(
+                    tertiaryColor.copy(alpha = 0.18f),
+                    surfaceContainerHigh
+                )
+            }
+            Brush.linearGradient(colors = colors)
+        }
+    }
+
+    val infiniteTransition = rememberInfiniteTransition(label = "ActiveCardTransition")
+    val flowOffset by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1000f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 6000, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "flowOffset"
+    )
+
+    val activeCardBackgroundBrush = remember(isDark, cardStyle, primaryColor, secondaryColor, tertiaryColor, primaryContainer, flowOffset) {
+        if (cardStyle == "solid") {
+            SolidColor(primaryContainer)
+        } else if (cardStyle == "vibrant") {
+            Brush.linearGradient(
+                colors = listOf(primaryColor, secondaryColor),
+                start = Offset(flowOffset - 500f, 0f),
+                end = Offset(flowOffset + 500f, 1000f)
+            )
+        } else {
+            val colors = if (isDark) {
+                listOf(
+                    primaryColor.copy(alpha = 0.68f),
+                    secondaryColor.copy(alpha = 0.50f),
+                    tertiaryColor.copy(alpha = 0.30f)
+                )
+            } else {
+                listOf(
+                    primaryColor.copy(alpha = 0.25f),
+                    secondaryColor.copy(alpha = 0.15f),
+                    Color.White
+                )
+            }
+            Brush.linearGradient(
+                colors = colors,
+                start = Offset(flowOffset - 500f, 0f),
+                end = Offset(flowOffset + 500f, 1000f)
+            )
+        }
+    }
+
     CompositionLocalProvider(LocalLayoutDirection provides layoutDirection) {
         Surface(
             modifier = Modifier.fillMaxSize(),
@@ -221,11 +407,24 @@ fun MainScreen() {
                         .padding(24.dp)
                 ) {
                     when (currentScreen) {
-                        "dashboard" -> DashboardScreen(settings, settingsManager)
+                        "dashboard" -> DashboardScreen(
+                            settings = settings,
+                            settingsManager = settingsManager,
+                            primaryCardBrush = primaryCardBrush,
+                            secondaryCardBrush = secondaryCardBrush,
+                            activeCardBackgroundBrush = activeCardBackgroundBrush,
+                            cardBorderBrush = cardBorderBrush
+                        )
                         "profiles" -> ProfilesScreen(settings, settingsManager)
                         "add_config" -> AddConfigScreen(settings, settingsManager)
                         "logs" -> LogsScreen(settings)
-                        "settings" -> SettingsScreen(settings, settingsManager)
+                        "settings" -> SettingsScreen(
+                            settings = settings,
+                            settingsManager = settingsManager,
+                            primaryCardBrush = primaryCardBrush,
+                            secondaryCardBrush = secondaryCardBrush,
+                            cardBorderBrush = cardBorderBrush
+                        )
                     }
                 }
             }
@@ -341,7 +540,14 @@ fun Sidebar(
 }
 
 @Composable
-fun DashboardScreen(settings: UserSettings, settingsManager: SettingsManager) {
+fun DashboardScreen(
+    settings: UserSettings,
+    settingsManager: SettingsManager,
+    primaryCardBrush: Brush,
+    secondaryCardBrush: Brush,
+    activeCardBackgroundBrush: Brush,
+    cardBorderBrush: Brush
+) {
     val isFarsi = settings.isFarsi
     val vpnState by SingboxManager.vpnState.collectAsState()
     val trafficStats by SingboxManager.trafficStats.collectAsState()
@@ -377,87 +583,103 @@ fun DashboardScreen(settings: UserSettings, settingsManager: SettingsManager) {
                 // Stats Cards
                 Card(
                     shape = ExpressiveCardShape,
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                    colors = CardDefaults.cardColors(containerColor = Color.Transparent),
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 16.dp)
+                        .background(brush = secondaryCardBrush, shape = ExpressiveCardShape)
+                        .border(width = 1.dp, brush = cardBorderBrush, shape = ExpressiveCardShape)
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Filled.Download,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
+                    VibrantCardContent(settings.cardStyle) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Filled.Download,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = DesktopStrings.get("download", isFarsi),
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = DesktopStrings.get("download", isFarsi),
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                text = formatSpeed(trafficStats.second),
+                                fontSize = 24.sp,
+                                fontWeight = FontWeight.Black,
+                                color = MaterialTheme.colorScheme.primary
                             )
                         }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = formatSpeed(trafficStats.second),
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.Black,
-                            color = MaterialTheme.colorScheme.primary
-                        )
                     }
                 }
 
                 Card(
                     shape = ExpressiveCardShape,
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
-                    modifier = Modifier.fillMaxWidth()
+                    colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(brush = secondaryCardBrush, shape = ExpressiveCardShape)
+                        .border(width = 1.dp, brush = cardBorderBrush, shape = ExpressiveCardShape)
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Filled.Upload,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.secondary
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
+                    VibrantCardContent(settings.cardStyle) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Filled.Upload,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.secondary
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = DesktopStrings.get("upload", isFarsi),
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = DesktopStrings.get("upload", isFarsi),
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                text = formatSpeed(trafficStats.first),
+                                fontSize = 24.sp,
+                                fontWeight = FontWeight.Black,
+                                color = MaterialTheme.colorScheme.secondary
                             )
                         }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = formatSpeed(trafficStats.first),
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.Black,
-                            color = MaterialTheme.colorScheme.secondary
-                        )
                     }
                 }
             }
 
             // Selected Node Banner
+            val isVpnActive = vpnState == "CONNECTED" || vpnState == "CONNECTING"
+            val activeBrush = if (isVpnActive) activeCardBackgroundBrush else primaryCardBrush
             Card(
                 shape = ExpressiveCardShape,
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)),
-                modifier = Modifier.fillMaxWidth()
+                colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(brush = activeBrush, shape = ExpressiveCardShape)
+                    .border(width = 1.dp, brush = cardBorderBrush, shape = ExpressiveCardShape)
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = DesktopStrings.get("active_node", isFarsi),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = displayNodeName,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
+                VibrantCardContent(settings.cardStyle) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = DesktopStrings.get("active_node", isFarsi),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = displayNodeName,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                 }
             }
         }
@@ -1263,7 +1485,7 @@ fun LogsScreen(settings: UserSettings) {
 }
 
 @Composable
-fun SettingsScreen(settings: UserSettings, settingsManager: SettingsManager) {
+fun SettingsScreen(settings: UserSettings, settingsManager: SettingsManager, primaryCardBrush: Brush, secondaryCardBrush: Brush, cardBorderBrush: Brush) {
     val isFarsi = settings.isFarsi
     val scope = rememberCoroutineScope()
 
@@ -1283,11 +1505,14 @@ fun SettingsScreen(settings: UserSettings, settingsManager: SettingsManager) {
         // Bypass Iran domains Card
         Card(
             shape = ExpressiveCardShape,
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
+            colors = CardDefaults.cardColors(containerColor = Color.Transparent),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = 16.dp)
+                .background(brush = primaryCardBrush, shape = ExpressiveCardShape)
+                .border(width = 1.dp, brush = cardBorderBrush, shape = ExpressiveCardShape)
         ) {
+            VibrantCardContent(settings.cardStyle) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1311,16 +1536,20 @@ fun SettingsScreen(settings: UserSettings, settingsManager: SettingsManager) {
                 }
                 Switch(checked = settings.bypassIran, onCheckedChange = { settingsManager.setBypassIran(it) })
             }
+            }
         }
 
         // Bypass LAN domains Card
         Card(
             shape = ExpressiveCardShape,
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
+            colors = CardDefaults.cardColors(containerColor = Color.Transparent),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = 16.dp)
+                .background(brush = primaryCardBrush, shape = ExpressiveCardShape)
+                .border(width = 1.dp, brush = cardBorderBrush, shape = ExpressiveCardShape)
         ) {
+            VibrantCardContent(settings.cardStyle) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1344,16 +1573,20 @@ fun SettingsScreen(settings: UserSettings, settingsManager: SettingsManager) {
                 }
                 Switch(checked = settings.bypassLan, onCheckedChange = { settingsManager.setBypassLan(it) })
             }
+            }
         }
 
         // TUN Mode Card
         Card(
             shape = ExpressiveCardShape,
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
+            colors = CardDefaults.cardColors(containerColor = Color.Transparent),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = 16.dp)
+                .background(brush = primaryCardBrush, shape = ExpressiveCardShape)
+                .border(width = 1.dp, brush = cardBorderBrush, shape = ExpressiveCardShape)
         ) {
+            VibrantCardContent(settings.cardStyle) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -1385,16 +1618,20 @@ fun SettingsScreen(settings: UserSettings, settingsManager: SettingsManager) {
                     )
                 }
             }
+            }
         }
 
         // Secure DNS Settings Card
         Card(
             shape = ExpressiveCardShape,
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
+            colors = CardDefaults.cardColors(containerColor = Color.Transparent),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = 16.dp)
+                .background(brush = primaryCardBrush, shape = ExpressiveCardShape)
+                .border(width = 1.dp, brush = cardBorderBrush, shape = ExpressiveCardShape)
         ) {
+            VibrantCardContent(settings.cardStyle) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
                     text = DesktopStrings.get("secure_dns", isFarsi),
@@ -1428,16 +1665,20 @@ fun SettingsScreen(settings: UserSettings, settingsManager: SettingsManager) {
                     }
                 }
             }
+            }
         }
 
         // Advanced Config Card (Fragment & Mux)
         Card(
             shape = ExpressiveCardShape,
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
+            colors = CardDefaults.cardColors(containerColor = Color.Transparent),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = 16.dp)
+                .background(brush = primaryCardBrush, shape = ExpressiveCardShape)
+                .border(width = 1.dp, brush = cardBorderBrush, shape = ExpressiveCardShape)
         ) {
+            VibrantCardContent(settings.cardStyle) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -1511,14 +1752,19 @@ fun SettingsScreen(settings: UserSettings, settingsManager: SettingsManager) {
                     }
                 }
             }
+            }
         }
 
         // Theme Palette Selector Card
         Card(
             shape = ExpressiveCardShape,
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
-            modifier = Modifier.fillMaxWidth()
+            colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(brush = primaryCardBrush, shape = ExpressiveCardShape)
+                .border(width = 1.dp, brush = cardBorderBrush, shape = ExpressiveCardShape)
         ) {
+            VibrantCardContent(settings.cardStyle) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
                     text = DesktopStrings.get("theme", isFarsi),
@@ -1567,7 +1813,50 @@ fun SettingsScreen(settings: UserSettings, settingsManager: SettingsManager) {
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(24.dp))
+                
+                Text(
+                    text = if (isFarsi) "استایل کارت‌ها" else "Card Background Style",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                val cardStyles = listOf(
+                    "glass" to (if (isFarsi) "شیشه‌ای (شفاف)" else "Glass (Translucent)"),
+                    "solid" to (if (isFarsi) "توپر (مات)" else "Solid (Opaque)"),
+                    "vibrant" to (if (isFarsi) "پویا (پررنگ)" else "Vibrant (High Contrast)")
+                )
+                
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    cardStyles.forEach { (styleKey, displayName) ->
+                        val selected = settings.cardStyle == styleKey
+                        val tc = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                        val bg = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
+                        
+                        Box(
+                            modifier = Modifier
+                                .clip(ExpressiveChipShape)
+                                .background(bg)
+                                .clickable { settingsManager.setCardStyle(styleKey) }
+                                .padding(horizontal = 12.dp, vertical = 8.dp)
+                        ) {
+                            Text(
+                                text = displayName,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = tc
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
 
                 // Dark mode toggle
                 Row(
@@ -1593,6 +1882,7 @@ fun SettingsScreen(settings: UserSettings, settingsManager: SettingsManager) {
                         }
                     )
                 }
+            }
             }
         }
     }

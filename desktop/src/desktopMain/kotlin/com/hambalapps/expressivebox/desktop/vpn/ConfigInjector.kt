@@ -264,7 +264,6 @@ object ConfigInjector {
         // Add sniffing rule at the beginning
         val sniffRule = JSONObject().apply {
             put("action", "sniff")
-            put("sniffer", JSONArray(listOf("http", "tls", "quic", "dns", "stun")))
         }
         newRules.put(sniffRule)
 
@@ -392,6 +391,7 @@ object ConfigInjector {
         }
 
         route.put("rules", newRules)
+        route.put("default_domain_resolver", "dns-bootstrap")
         route.put("auto_detect_interface", true)
     }
 

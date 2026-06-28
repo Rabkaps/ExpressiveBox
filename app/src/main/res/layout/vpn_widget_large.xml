@@ -1,0 +1,255 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:theme="@style/Theme.ExpressiveBox"
+    android:padding="8dp">
+
+    <!-- Expanded Card Background -->
+    <LinearLayout
+        android:id="@+id/widget_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:background="@drawable/widget_background">
+
+        <!-- Top Section: Header & Status -->
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:layout_alignParentStart="true"
+                android:layout_centerVertical="true">
+
+                <TextView
+                    android:id="@+id/widget_title"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="ExpressiveBox"
+                    android:textColor="?attr/colorOnSurfaceVariant"
+                    android:textSize="11sp"
+                    android:textStyle="bold"
+                    android:letterSpacing="0.05" />
+
+                <TextView
+                    android:id="@+id/widget_status"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="UNPROTECTED"
+                    android:textColor="?attr/colorOutline"
+                    android:textSize="22sp"
+                    android:layout_marginTop="2dp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <!-- Toggle Power Button -->
+            <ImageView
+                android:id="@+id/widget_button_toggle"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_alignParentEnd="true"
+                android:layout_centerVertical="true"
+                android:background="@drawable/widget_button_background"
+                android:src="@drawable/ic_power"
+                android:padding="12dp"
+                android:scaleType="fitCenter"
+                android:clickable="true"
+                android:focusable="true"
+                android:contentDescription="Toggle Connection" />
+
+        </RelativeLayout>
+
+        <!-- Selected Server Info Badge -->
+        <LinearLayout
+            android:id="@+id/widget_node_badge"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingHorizontal="12dp"
+            android:paddingVertical="6dp"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/widget_node_badge_background"
+            android:gravity="center_vertical">
+
+            <ImageView
+                android:id="@+id/widget_node_icon"
+                android:layout_width="14dp"
+                android:layout_height="14dp"
+                android:src="@drawable/ic_node"
+                android:tint="?attr/colorOnSurfaceVariant" />
+
+            <TextView
+                android:id="@+id/widget_node_name"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:text="No active node selected"
+                android:textColor="?attr/colorOnSurface"
+                android:textSize="12sp"
+                android:maxLines="1"
+                android:ellipsize="end" />
+
+        </LinearLayout>
+
+        <!-- Divider -->
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="?attr/colorOutlineVariant"
+            android:alpha="0.2"
+            android:layout_marginVertical="10dp" />
+
+        <!-- Modes Selector Header -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="CONNECTION MODE"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:textSize="9sp"
+            android:textStyle="bold"
+            android:letterSpacing="0.08"
+            android:layout_marginBottom="6dp" />
+
+        <!-- Mode Buttons Row -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="12dp"
+            android:gravity="center_vertical">
+
+            <!-- Standard Mode -->
+            <TextView
+                android:id="@+id/btn_mode_standard"
+                android:layout_width="0dp"
+                android:layout_height="32dp"
+                android:layout_weight="1"
+                android:layout_marginEnd="4dp"
+                android:background="@drawable/widget_node_badge_background"
+                android:text="Standard"
+                android:textColor="?attr/colorOnSurface"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:clickable="true"
+                android:focusable="true" />
+
+            <!-- Gaming Mode -->
+            <TextView
+                android:id="@+id/btn_mode_gaming"
+                android:layout_width="0dp"
+                android:layout_height="32dp"
+                android:layout_weight="1"
+                android:layout_marginHorizontal="2dp"
+                android:background="@drawable/widget_node_badge_background"
+                android:text="Gaming"
+                android:textColor="?attr/colorOnSurface"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:clickable="true"
+                android:focusable="true" />
+
+            <!-- AI Bypass Mode -->
+            <TextView
+                android:id="@+id/btn_mode_ai"
+                android:layout_width="0dp"
+                android:layout_height="32dp"
+                android:layout_weight="1"
+                android:layout_marginStart="4dp"
+                android:background="@drawable/widget_node_badge_background"
+                android:text="AI Bypass"
+                android:textColor="?attr/colorOnSurface"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:clickable="true"
+                android:focusable="true" />
+
+        </LinearLayout>
+
+        <!-- Quick Select Servers Header -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="QUICK SELECT SERVERS"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:textSize="9sp"
+            android:textStyle="bold"
+            android:letterSpacing="0.08"
+            android:layout_marginBottom="6dp" />
+
+        <!-- Servers Selector Row -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <!-- Server Slot 1 -->
+            <TextView
+                android:id="@+id/btn_server_1"
+                android:layout_width="0dp"
+                android:layout_height="32dp"
+                android:layout_weight="1"
+                android:layout_marginEnd="4dp"
+                android:background="@drawable/widget_node_badge_background"
+                android:text="Slot 1"
+                android:textColor="?attr/colorOnSurface"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:maxLines="1"
+                android:ellipsize="end"
+                android:paddingHorizontal="4dp"
+                android:clickable="true"
+                android:focusable="true" />
+
+            <!-- Server Slot 2 -->
+            <TextView
+                android:id="@+id/btn_server_2"
+                android:layout_width="0dp"
+                android:layout_height="32dp"
+                android:layout_weight="1"
+                android:layout_marginHorizontal="2dp"
+                android:background="@drawable/widget_node_badge_background"
+                android:text="Slot 2"
+                android:textColor="?attr/colorOnSurface"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:maxLines="1"
+                android:ellipsize="end"
+                android:paddingHorizontal="4dp"
+                android:clickable="true"
+                android:focusable="true" />
+
+            <!-- Server Slot 3 -->
+            <TextView
+                android:id="@+id/btn_server_3"
+                android:layout_width="0dp"
+                android:layout_height="32dp"
+                android:layout_weight="1"
+                android:layout_marginStart="4dp"
+                android:background="@drawable/widget_node_badge_background"
+                android:text="Slot 3"
+                android:textColor="?attr/colorOnSurface"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:maxLines="1"
+                android:ellipsize="end"
+                android:paddingHorizontal="4dp"
+                android:clickable="true"
+                android:focusable="true" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+</RelativeLayout>

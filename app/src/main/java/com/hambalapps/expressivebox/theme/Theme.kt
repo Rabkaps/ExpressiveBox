@@ -620,6 +620,31 @@ fun ExpressiveBoxTheme(
             }
         }
     }
+    val sharedPrefs = remember(context) { context.getSharedPreferences("widget_theme_colors", Context.MODE_PRIVATE) }
+    androidx.compose.runtime.LaunchedEffect(colorScheme) {
+        sharedPrefs.edit().apply {
+            putInt("colorPrimary", colorScheme.primary.toArgb())
+            putInt("colorSecondary", colorScheme.secondary.toArgb())
+            putInt("colorOutline", colorScheme.outline.toArgb())
+            putInt("colorSurface", colorScheme.surface.toArgb())
+            putInt("colorSurfaceVariant", colorScheme.surfaceVariant.toArgb())
+            putInt("colorPrimaryContainer", colorScheme.primaryContainer.toArgb())
+            putInt("colorSecondaryContainer", colorScheme.secondaryContainer.toArgb())
+            putInt("onPrimaryContainer", colorScheme.onPrimaryContainer.toArgb())
+            putInt("onSecondaryContainer", colorScheme.onSecondaryContainer.toArgb())
+            putInt("onSurfaceVariant", colorScheme.onSurfaceVariant.toArgb())
+            putInt("onSurface", colorScheme.onSurface.toArgb())
+            apply()
+        }
+        val widgetIntent = android.content.Intent(context, com.hambalapps.expressivebox.widget.VPNWidgetProvider::class.java).apply {
+            action = android.appwidget.AppWidgetManager.ACTION_APPWIDGET_UPDATE
+            val ids = android.appwidget.AppWidgetManager.getInstance(context).getAppWidgetIds(
+                android.content.ComponentName(context, com.hambalapps.expressivebox.widget.VPNWidgetProvider::class.java)
+            )
+            putExtra(android.appwidget.AppWidgetManager.EXTRA_APPWIDGET_IDS, ids)
+        }
+        context.sendBroadcast(widgetIntent)
+    }
 
     MaterialExpressiveTheme(
         colorScheme = colorScheme,

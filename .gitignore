@@ -30,4 +30,6 @@ local.properties
 warp_response.json
 app/warp_response.json
 .kotlin/
+/desktop/build/
+
 
