@@ -153,7 +153,7 @@ object ConfigInjector {
             put("tag", "tun-in")
             put("interface_name", "tun0")
             put("stack", if (settings.vpnMode == "gaming") "system" else (settings.run { if (tunStack.isEmpty()) "mixed" else tunStack }))
-            put("mtu", if (settings.vpnMode == "gaming") 1350 else 9000)
+            put("mtu", if (settings.vpnMode == "gaming") 1350 else 1400)
             put("auto_route", true)
             put("strict_route", true)
             put("address", JSONArray(listOf("172.19.0.1/30")))

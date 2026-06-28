@@ -242,6 +242,7 @@ class VPNWidgetProvider : AppWidgetProvider() {
                     // 1. Bind viewsSmall
                     viewsSmall.setTextViewText(R.id.widget_status, stateText)
                     viewsSmall.setTextColor(R.id.widget_status, statusColor)
+                    viewsSmall.setTextViewText(R.id.widget_node_name, if (lastVpnState == "CONNECTED") nodeName else "Tap to secure")
                     viewsSmall.setInt(R.id.widget_container, "setBackgroundResource", bgPillDrawable)
                     viewsSmall.setInt(R.id.widget_button_toggle, "setBackgroundResource", toggleBgDrawable)
                     viewsSmall.setInt(R.id.widget_button_toggle, "setColorFilter", iconTintColor)

@@ -4,51 +4,70 @@
     android:layout_height="match_parent"
     android:theme="@style/Theme.ExpressiveBox">
 
-    <!-- Thin Capsule Container (Locked to 48dp height and wrap_content width to form a floating One UI capsule pill widget) -->
+    <!-- Invisible background view to absorb the launcher's automatic clipping & card styling -->
+    <View
+        android:id="@android:id/background"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@android:color/transparent" />
+
+    <!-- True Capsule/Pill Container (Perfect capsule ends with 1000dp corner radius, untouched by launcher clipping) -->
     <LinearLayout
         android:id="@+id/widget_container"
-        android:layout_width="wrap_content"
-        android:layout_height="48dp"
-        android:layout_gravity="center"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
         android:orientation="horizontal"
-        android:paddingHorizontal="16dp"
         android:gravity="center_vertical"
-        android:background="@drawable/widget_background_pill">
+        android:background="@drawable/widget_background_pill"
+        android:paddingHorizontal="16dp">
 
-        <!-- Status Dot / Node Icon -->
-        <ImageView
-            android:layout_width="16dp"
-            android:layout_height="16dp"
-            android:src="@drawable/ic_node"
-            android:tint="?attr/colorPrimary"
-            android:layout_marginEnd="8dp" />
-
-        <!-- Status Info Text -->
-        <TextView
-            android:id="@+id/widget_status"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="UNPROTECTED"
-            android:textColor="?attr/colorOutline"
-            android:textSize="13sp"
-            android:maxLines="1"
-            android:ellipsize="end"
-            android:textStyle="bold"
-            android:letterSpacing="0.02"
-            android:layout_marginEnd="16dp" />
-
-        <!-- Thin Capsule Toggle Button (Centered inside the 48dp height) -->
-        <ImageView
+        <!-- Circular Action Toggle Button on the Left (styled exactly like Samsung's Optimise widget) -->
+        <FrameLayout
             android:id="@+id/widget_button_toggle"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
             android:background="@drawable/widget_button_background"
-            android:src="@drawable/ic_power"
-            android:padding="7dp"
-            android:scaleType="fitCenter"
             android:clickable="true"
             android:focusable="true"
-            android:contentDescription="Toggle Connection" />
+            android:contentDescription="Toggle Connection">
+
+            <ImageView
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_power"
+                android:scaleType="fitCenter" />
+        </FrameLayout>
+
+        <!-- Status and Node Text Column on the Right -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginStart="14dp">
+
+            <TextView
+                android:id="@+id/widget_status"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="UNPROTECTED"
+                android:textColor="?attr/colorOutline"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:maxLines="1"
+                android:ellipsize="end" />
+
+            <TextView
+                android:id="@+id/widget_node_name"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Tap to secure"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                android:textSize="11sp"
+                android:maxLines="1"
+                android:ellipsize="end"
+                android:layout_marginTop="1dp" />
+        </LinearLayout>
 
     </LinearLayout>
 
