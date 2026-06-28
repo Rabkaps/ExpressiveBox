@@ -13,7 +13,7 @@ android {
     compileSdk = 37
     defaultConfig {
         applicationId = "com.hambalapps.expressivebox"
-        minSdk = 24
+        minSdk = 23
         targetSdk = 36
         versionCode = 172
         versionName = "1.6.12"
