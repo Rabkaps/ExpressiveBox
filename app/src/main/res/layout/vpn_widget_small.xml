@@ -3,16 +3,16 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:theme="@style/Theme.ExpressiveBox"
-    android:padding="6dp">
+    android:padding="4dp">
 
-    <!-- Capsule Card Background -->
+    <!-- Capsule Card Background (Fixed height centered vertically) -->
     <LinearLayout
         android:id="@+id/widget_container"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
+        android:layout_height="60dp"
+        android:layout_centerInParent="true"
         android:orientation="horizontal"
         android:paddingHorizontal="16dp"
-        android:paddingVertical="8dp"
         android:gravity="center_vertical"
         android:background="@drawable/widget_background_pill">
 
@@ -45,6 +45,8 @@
                     android:textColor="?attr/colorOnSurfaceVariant"
                     android:textSize="10sp"
                     android:textStyle="bold"
+                    android:maxLines="1"
+                    android:ellipsize="end"
                     android:letterSpacing="0.03" />
 
                 <TextView
@@ -54,6 +56,8 @@
                     android:text="UNPROTECTED"
                     android:textColor="?attr/colorOutline"
                     android:textSize="14sp"
+                    android:maxLines="1"
+                    android:ellipsize="end"
                     android:textStyle="bold" />
             </LinearLayout>
         </LinearLayout>

@@ -42,7 +42,9 @@
                     android:layout_height="wrap_content"
                     android:text="UNPROTECTED"
                     android:textColor="?attr/colorOutline"
-                    android:textSize="22sp"
+                    android:textSize="18sp"
+                    android:maxLines="1"
+                    android:ellipsize="end"
                     android:layout_marginTop="2dp"
                     android:textStyle="bold" />
             </LinearLayout>
