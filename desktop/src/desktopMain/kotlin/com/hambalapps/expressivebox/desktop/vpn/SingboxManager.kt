@@ -58,7 +58,7 @@ object SingboxManager {
         }
     }
 
-    fun start(rawProfile: String, settingsManager: SettingsManager): Boolean {
+    suspend fun start(rawProfile: String, settingsManager: SettingsManager): Boolean {
         if (_vpnState.value == "CONNECTED" || _vpnState.value == "CONNECTING") {
             stop()
         }
@@ -67,6 +67,14 @@ object SingboxManager {
         _vpnLogs.value = "Starting sing-box...\n"
         
         try {
+            // Check for admin privileges if TUN is enabled
+            if (settingsManager.currentSettings.enableTun && !isRunningAsAdmin()) {
+                log("CRITICAL ERROR: TUN Mode is enabled but ExpressiveBox is not running as Administrator!")
+                log("Please restart the app as Administrator (Right click -> Run as Administrator), or disable TUN Mode in Settings.")
+                stop()
+                return false
+            }
+
             // 1. Generate Config
             val configJson = ConfigInjector.injectConfig(
                 rawProfile = rawProfile,
@@ -96,6 +104,36 @@ object SingboxManager {
                         log(line)
                     }
                 }
+            }
+
+            // Monitor process lifetime
+            scope.launch {
+                try {
+                    proc.waitFor()
+                    if (process == proc) {
+                        log("Sing-box process terminated unexpectedly.")
+                        stop()
+                    }
+                } catch (e: Exception) {}
+            }
+
+            // Wait a moment and check if the process exited immediately
+            delay(1000)
+            if (!proc.isAlive) {
+                val exitCode = proc.exitValue()
+                log("Failed to start VPN: sing-box process exited immediately with code $exitCode")
+                try {
+                    if (logFile.exists()) {
+                        val errorLog = logFile.readText()
+                        if (errorLog.contains("configure tun interface: Access is denied")) {
+                            log("CRITICAL ERROR: TUN interface configuration failed (Access is denied). Please run ExpressiveBox as Administrator!")
+                        } else {
+                            log("Sing-box Error Log:\n$errorLog")
+                        }
+                    }
+                } catch (le: Exception) {}
+                stop()
+                return false
             }
 
             // 4. Configure Windows System Proxy (Standard user mode)
@@ -186,6 +224,15 @@ object SingboxManager {
                     _trafficStats.value = Pair(0L, 0L)
                 }
             }
+        }
+    }
+
+    private fun isRunningAsAdmin(): Boolean {
+        return try {
+            val process = ProcessBuilder("net", "session").start()
+            process.waitFor() == 0
+        } catch (e: Exception) {
+            false
         }
     }
 }

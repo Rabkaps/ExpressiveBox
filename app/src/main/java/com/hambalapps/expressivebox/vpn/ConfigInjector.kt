@@ -635,6 +635,13 @@ object ConfigInjector {
                 put("tag", "block")
             })
         }
+        if (settings.vpnMode == "ai_bypass" && settings.warpPrivateKey.isNotEmpty()) {
+            cleanOutbounds.put(JSONObject().apply {
+                put("type", "direct")
+                put("tag", "warp-out")
+                put("detour", "warp-endpoint")
+            })
+        }
 
         config.put("outbounds", cleanOutbounds)
     }
@@ -746,7 +753,7 @@ object ConfigInjector {
         
         for (i in 0 until endpoints.length()) {
             val ep = endpoints.optJSONObject(i) ?: continue
-            if (ep.optString("tag") != "warp-out") {
+            if (ep.optString("tag") != "warp-endpoint") {
                 cleanEndpoints.put(ep)
             }
         }
@@ -754,7 +761,7 @@ object ConfigInjector {
         if (settings.vpnMode == "ai_bypass" && settings.warpPrivateKey.isNotEmpty()) {
             val warpEndpoint = JSONObject().apply {
                 put("type", "wireguard")
-                put("tag", "warp-out")
+                put("tag", "warp-endpoint")
                 
                 val rawIp = settings.warpIpAddress.trim()
                 val formattedIp = if (rawIp.isEmpty()) {
