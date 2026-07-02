@@ -857,7 +857,7 @@ object ConfigInjector {
             type = "http"
         }
         if (type == null) return
-        if (type == "ws" || type == "grpc" || type == "httpupgrade" || type == "kcp" || type == "mkcp" || type == "http") {
+        if (type == "ws" || type == "grpc" || type == "httpupgrade" || type == "kcp" || type == "mkcp" || type == "http" || type == "xhttp") {
             val transport = JSONObject()
             transport.put("type", if (type == "mkcp") "kcp" else type)
 
@@ -879,6 +879,11 @@ object ConfigInjector {
                 val path = queryParams["path"] ?: "/"
                 transport.put("path", if (path.startsWith("/")) path else "/$path")
                 queryParams["host"]?.let { transport.put("host", it) }
+            } else if (type == "xhttp") {
+                val path = queryParams["path"] ?: "/"
+                transport.put("path", if (path.startsWith("/")) path else "/$path")
+                queryParams["host"]?.let { transport.put("host", it) }
+                queryParams["mode"]?.let { transport.put("mode", it) }
             }
             outbound.put("transport", transport)
         }
