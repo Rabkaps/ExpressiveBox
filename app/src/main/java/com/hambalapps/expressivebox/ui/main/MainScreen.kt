@@ -71,6 +71,7 @@ import com.hambalapps.expressivebox.vpn.ProxyNameResolver
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.async
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.Dispatchers
 import kotlin.math.cos
@@ -363,10 +364,12 @@ fun MainScreen(
     var searchQuery by remember { mutableStateOf("") }
     var isSearchVisible by remember { mutableStateOf(false) }
     var selectedTab by remember { mutableStateOf(0) }
+    var selectedCountryFilter by remember { mutableStateOf("All Countries") }
+    var selectedSubGroupFilter by remember { mutableStateOf("All Groups") }
     var pingsMap by remember { mutableStateOf(mapOf<String, Int>()) }
     var isTestingPings by remember { mutableStateOf(false) }
 
-    val filteredServerList = remember(serverList, searchQuery, selectedTab) {
+    val filteredServerList = remember(serverList, searchQuery, selectedTab, selectedCountryFilter, selectedSubGroupFilter, subscriptions) {
         serverList.mapNotNull { serverLink ->
             val type = serverLink.substringBefore("://").uppercase()
             val matchesTab = when (selectedTab) {
@@ -381,7 +384,23 @@ fun MainScreen(
             }
             if (matchesTab) {
                 val name = ProxyNameResolver.getProxyName(serverLink, context)
-                if (name.contains(searchQuery, ignoreCase = true)) {
+                val matchesSearch = name.contains(searchQuery, ignoreCase = true)
+                
+                val matchesGroup = if (selectedSubGroupFilter == "All Groups") {
+                    true
+                } else {
+                    val matchingSub = subscriptions.find { it.name == selectedSubGroupFilter }
+                    matchingSub?.servers?.split("\n")?.map { it.trim() }?.contains(serverLink.trim()) ?: false
+                }
+                
+                val matchesCountry = if (selectedCountryFilter == "All Countries") {
+                    true
+                } else {
+                    val emoji = selectedCountryFilter.substringBefore(" ")
+                    getFlagEmoji(name) == emoji
+                }
+                
+                if (matchesSearch && matchesGroup && matchesCountry) {
                     ServerItem(
                         link = serverLink,
                         name = name,
@@ -830,6 +849,13 @@ fun MainScreen(
                                 cardStyle = cardStyle,
                                 isDark = isDark,
                                 delayTestUrl = delayTestUrl,
+                                activeProfile = activeProfile,
+                                activeSubId = activeSubId,
+                                subscriptions = subscriptions,
+                                vpnMode = vpnMode,
+                                vpnModeTunnelGames = vpnModeTunnelGames,
+                                settingsManager = settingsManager,
+                                scope = scope,
                                 onConnectToggle = {
                                     if (vpnState == "CONNECTED") {
                                         stopVpnService(context)
@@ -849,555 +875,14 @@ fun MainScreen(
                                             }
                                         }
                                     }
+                                },
+                                onNavigateToServers = {
+                                    val idx = tabs.indexOfFirst { it.first == 1 }
+                                    if (idx >= 0) {
+                                        scope.launch { pagerState.animateScrollToPage(idx) }
+                                    }
                                 }
                             )
-
-                            Spacer(modifier = Modifier.height(20.dp))
-
-                            // VPN Mode Selector Card
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(brush = secondaryCardBrush, shape = ExpressiveCardShape)
-                                    .border(
-                                        width = 1.dp,
-                                        brush = cardBorderBrush,
-                                        shape = ExpressiveCardShape
-                                    ),
-                                shape = ExpressiveCardShape,
-                                colors = CardDefaults.cardColors(containerColor = Color.Transparent)
-                            ) {
-                                VibrantCardContent(settings.cardStyle) {
-                                    Column(modifier = Modifier.padding(20.dp)) {
-                                    Text(
-                                        text = stringResource(R.string.vpn_mode_title),
-                                        fontWeight = FontWeight.Bold,
-                                        style = MaterialTheme.typography.titleMedium,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                    Spacer(modifier = Modifier.height(12.dp))
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        val modes = listOf(
-                                            Triple("standard", R.string.mode_standard_title, R.string.tag_stable),
-                                            Triple("gaming", R.string.mode_gaming_title, R.string.tag_experimental),
-                                            Triple("ai_bypass", R.string.mode_ai_bypass_title, R.string.tag_experimental)
-                                        )
-                                        modes.forEach { (modeKey, titleResId, tagResId) ->
-                                            val isSelected = vpnMode == modeKey
-                                            Box(
-                                                modifier = Modifier
-                                                    .weight(1f)
-                                                    .clip(ExpressiveChipShape)
-                                                    .background(
-                                                        if (isSelected) MaterialTheme.colorScheme.primary
-                                                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                                                    )
-                                                    .border(
-                                                        width = 1.dp,
-                                                        color = if (isSelected) MaterialTheme.colorScheme.primary
-                                                                else MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
-                                                        shape = ExpressiveChipShape
-                                                    )
-                                                    .clickable {
-                                                        if (modeKey == "ai_bypass") {
-                                                            if (warpPrivateKey.isEmpty() || warpClientId.isEmpty()) {
-                                                                isRegisteringWarp = true
-                                                                scope.launch {
-                                                                    val creds = com.hambalapps.expressivebox.vpn.registerWarpAccount()
-                                                                    isRegisteringWarp = false
-                                                                    if (creds != null) {
-                                                                        settingsManager.setWarpCredentials(
-                                                                            creds.privateKey,
-                                                                            creds.publicKey,
-                                                                            creds.ipAddress,
-                                                                            creds.clientId
-                                                                        )
-                                                                        settingsManager.setVpnMode("ai_bypass")
-                                                                        if (vpnState == "CONNECTED") {
-                                                                            startVpnService(context)
-                                                                        }
-                                                                    } else {
-                                                                        android.widget.Toast.makeText(
-                                                                            context,
-                                                                            context.getString(R.string.warp_failed),
-                                                                            android.widget.Toast.LENGTH_LONG
-                                                                        ).show()
-                                                                    }
-                                                                }
-                                                            } else {
-                                                                scope.launch {
-                                                                    settingsManager.setVpnMode("ai_bypass")
-                                                                    if (vpnState == "CONNECTED") {
-                                                                        startVpnService(context)
-                                                                    }
-                                                                }
-                                                            }
-                                                        } else {
-                                                            scope.launch {
-                                                                settingsManager.setVpnMode(modeKey)
-                                                                if (vpnState == "CONNECTED") {
-                                                                    startVpnService(context)
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                    .pressScaleEffect()
-                                                    .padding(vertical = 10.dp, horizontal = 4.dp),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Column(
-                                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                                    verticalArrangement = Arrangement.Center
-                                                ) {
-                                                    Text(
-                                                        text = stringResource(titleResId),
-                                                        style = MaterialTheme.typography.labelSmall,
-                                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                                        color = if (isSelected) MaterialTheme.colorScheme.onPrimary
-                                                                else MaterialTheme.colorScheme.onSurfaceVariant,
-                                                        maxLines = 1,
-                                                        overflow = TextOverflow.Ellipsis
-                                                    )
-                                                    Spacer(modifier = Modifier.height(2.dp))
-                                                    Text(
-                                                        text = stringResource(tagResId),
-                                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = MaterialTheme.typography.labelSmall.fontSize * 0.8f),
-                                                        fontWeight = FontWeight.Normal,
-                                                        color = if (isSelected) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
-                                                                else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                                                        maxLines = 1,
-                                                        overflow = TextOverflow.Ellipsis
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    }
-                                    
-                                    AnimatedVisibility(
-                                        visible = vpnMode == "gaming",
-                                        enter = expandVertically() + fadeIn(),
-                                        exit = shrinkVertically() + fadeOut()
-                                    ) {
-                                        Column {
-                                            Spacer(modifier = Modifier.height(16.dp))
-                                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                                            Spacer(modifier = Modifier.height(16.dp))
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Column(modifier = Modifier.weight(1f)) {
-                                                    Text(
-                                                        text = stringResource(R.string.tunnel_games_title),
-                                                        style = MaterialTheme.typography.bodyMedium,
-                                                        fontWeight = FontWeight.Bold,
-                                                        color = MaterialTheme.colorScheme.onSurface
-                                                    )
-                                                    Text(
-                                                        text = stringResource(R.string.tunnel_games_desc),
-                                                        style = MaterialTheme.typography.bodySmall,
-                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                    )
-                                                }
-                                                Spacer(modifier = Modifier.width(16.dp))
-                                                Switch(
-                                                    checked = vpnModeTunnelGames,
-                                                    onCheckedChange = { checked ->
-                                                        scope.launch {
-                                                            settingsManager.setVpnModeTunnelGames(checked)
-                                                            if (vpnState == "CONNECTED") {
-                                                                startVpnService(context)
-                                                            }
-                                                        }
-                                                    }
-                                                )
-                                            }
-                                        }
-                                    }
-
-                                    AnimatedVisibility(
-                                        visible = vpnMode == "ai_bypass",
-                                        enter = expandVertically() + fadeIn(),
-                                        exit = shrinkVertically() + fadeOut()
-                                    ) {
-                                        Column {
-                                            Spacer(modifier = Modifier.height(16.dp))
-                                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                                            Spacer(modifier = Modifier.height(16.dp))
-                                            
-                                            // 1. WARP Detour Selection
-                                            Text(
-                                                text = stringResource(R.string.warp_detour_title),
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.onSurface
-                                            )
-                                            Text(
-                                                text = stringResource(R.string.warp_detour_desc),
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                            Spacer(modifier = Modifier.height(10.dp))
-                                            
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                            ) {
-                                                val detourOptions = listOf(
-                                                    "proxy" to "Proxy",
-                                                    "direct" to "Direct"
-                                                )
-                                                detourOptions.forEach { (optionKey, optionName) ->
-                                                    val isSelected = warpDetourMode == optionKey
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .weight(1f)
-                                                            .clip(ExpressiveChipShape)
-                                                            .background(
-                                                                if (isSelected) MaterialTheme.colorScheme.primary
-                                                                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                                                            )
-                                                            .border(
-                                                                width = 1.dp,
-                                                                color = if (isSelected) MaterialTheme.colorScheme.primary
-                                                                        else MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
-                                                                shape = ExpressiveChipShape
-                                                            )
-                                                            .clickable {
-                                                                scope.launch {
-                                                                    settingsManager.setWarpDetourMode(optionKey)
-                                                                    if (vpnState == "CONNECTED") {
-                                                                        startVpnService(context)
-                                                                    }
-                                                                }
-                                                            }
-                                                            .pressScaleEffect()
-                                                            .padding(vertical = 10.dp, horizontal = 4.dp),
-                                                        contentAlignment = Alignment.Center
-                                                    ) {
-                                                        Text(
-                                                            text = optionName,
-                                                            style = MaterialTheme.typography.labelSmall,
-                                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                                            color = if (isSelected) MaterialTheme.colorScheme.onPrimary
-                                                                    else MaterialTheme.colorScheme.onSurfaceVariant,
-                                                            maxLines = 1,
-                                                            overflow = TextOverflow.Ellipsis
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                            
-                                            Spacer(modifier = Modifier.height(20.dp))
-                                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
-                                            Spacer(modifier = Modifier.height(16.dp))
-                                            
-                                            // 2. WARP Port Selection
-                                            Text(
-                                                text = stringResource(R.string.warp_port_title),
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.onSurface
-                                            )
-                                            Text(
-                                                text = stringResource(R.string.warp_port_desc),
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                            Spacer(modifier = Modifier.height(10.dp))
-                                            
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                            ) {
-                                                val portOptions = listOf("2408", "500", "1701", "4500")
-                                                portOptions.forEach { portStr ->
-                                                    val isSelected = warpPort == portStr
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .weight(1f)
-                                                            .clip(ExpressiveChipShape)
-                                                            .background(
-                                                                if (isSelected) MaterialTheme.colorScheme.primary
-                                                                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                                                            )
-                                                            .border(
-                                                                width = 1.dp,
-                                                                color = if (isSelected) MaterialTheme.colorScheme.primary
-                                                                        else MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
-                                                                shape = ExpressiveChipShape
-                                                            )
-                                                            .clickable {
-                                                                scope.launch {
-                                                                    settingsManager.setWarpPort(portStr)
-                                                                    if (vpnState == "CONNECTED") {
-                                                                        startVpnService(context)
-                                                                    }
-                                                                }
-                                                            }
-                                                            .pressScaleEffect()
-                                                            .padding(vertical = 10.dp, horizontal = 4.dp),
-                                                        contentAlignment = Alignment.Center
-                                                    ) {
-                                                        Text(
-                                                            text = portStr,
-                                                            style = MaterialTheme.typography.labelSmall,
-                                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                                            color = if (isSelected) MaterialTheme.colorScheme.onPrimary
-                                                                    else MaterialTheme.colorScheme.onSurfaceVariant,
-                                                            maxLines = 1,
-                                                            overflow = TextOverflow.Ellipsis
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                                }
-                            }
-
-                            if (isRegisteringWarp) {
-                                AlertDialog(
-                                    onDismissRequest = {},
-                                    confirmButton = {},
-                                    title = { Text(stringResource(R.string.registering_warp)) },
-                                    text = {
-                                        Box(
-                                            modifier = Modifier.fillMaxWidth().padding(16.dp),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            CircularProgressIndicator()
-                                        }
-                                    },
-                                    shape = ExpressiveCardShape,
-                                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.height(20.dp))
-
-                            Box(modifier = Modifier.fillMaxWidth()) {
-                                if (Config.IS_SPECIAL) {
-                                    PeakingKitty(
-                                        modifier = Modifier
-                                            .align(Alignment.TopStart)
-                                            .offset(x = 28.dp, y = (-22).dp)
-                                    )
-                                }
-                                Card(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .background(
-                                            brush = if (vpnState == "CONNECTED" || vpnState == "CONNECTING") activeCardBackgroundBrush else primaryCardBrush,
-                                            shape = ExpressiveCardShape
-                                        )
-                                        .border(
-                                            width = 1.dp,
-                                            brush = cardBorderBrush,
-                                            shape = ExpressiveCardShape
-                                        )
-                                        .clickable { scope.launch { pagerState.animateScrollToPage(0) } }
-                                        .pressScaleEffect(),
-                                    shape = ExpressiveCardShape,
-                                    colors = CardDefaults.cardColors(
-                                        containerColor = Color.Transparent
-                                    )
-                                ) {
-                                    VibrantCardContent(settings.cardStyle) {
-                                    Column(modifier = Modifier.padding(20.dp)) {
-                                        Text(
-                                            text = stringResource(R.string.active_node),
-                                            fontWeight = FontWeight.Bold,
-                                            style = MaterialTheme.typography.titleMedium,
-                                            color = MaterialTheme.colorScheme.onSurface
-                                        )
-                                        Spacer(modifier = Modifier.height(12.dp))
-                                        AnimatedContent(
-                                            targetState = activeProfile,
-                                            transitionSpec = {
-                                                (fadeIn(animationSpec = tween(220, delayMillis = 90)) + 
-                                                 scaleIn(initialScale = 0.92f, animationSpec = tween(220, delayMillis = 90)))
-                                                .togetherWith(fadeOut(animationSpec = tween(90)))
-                                            },
-                                            label = "ActiveProfileContent"
-                                        ) { targetProfile ->
-                                            if (targetProfile.isNotEmpty()) {
-                                                Row(
-                                                    verticalAlignment = Alignment.CenterVertically,
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .clip(ExpressiveButtonShape)
-                                                        .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))
-                                                        .border(
-                                                            width = 1.dp,
-                                                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
-                                                            shape = ExpressiveButtonShape
-                                                        )
-                                                        .padding(12.dp)
-                                                ) {
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .size(36.dp)
-                                                            .clip(CircleShape)
-                                                            .background(MaterialTheme.colorScheme.primary),
-                                                        contentAlignment = Alignment.Center
-                                                    ) {
-                                                        Icon(
-                                                            imageVector = Icons.Default.Check,
-                                                            contentDescription = "Active",
-                                                            tint = MaterialTheme.colorScheme.onPrimary,
-                                                            modifier = Modifier.size(20.dp)
-                                                        )
-                                                    }
-                                                    Spacer(modifier = Modifier.width(12.dp))
-                                                    Column(modifier = Modifier.weight(1f)) {
-                                                        Text(
-                                                            text = if (targetProfile.startsWith("{")) stringResource(R.string.custom_json) else ProxyNameResolver.getProxyName(targetProfile, context),
-                                                            style = MaterialTheme.typography.bodyMedium,
-                                                            fontWeight = FontWeight.Bold,
-                                                            color = MaterialTheme.colorScheme.onSurface,
-                                                            maxLines = 1,
-                                                            overflow = TextOverflow.Ellipsis
-                                                        )
-                                                        Text(
-                                                            text = if (targetProfile.startsWith("{")) "JSON" else targetProfile.substringBefore("://").uppercase(),
-                                                            style = MaterialTheme.typography.labelSmall,
-                                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                        )
-                                                    }
-                                                }
-                                            } else {
-                                                Text(
-                                                    text = stringResource(R.string.no_profile_active),
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    style = MaterialTheme.typography.bodyMedium
-                                                )
-                                            }
-                                        }
-                                        }
-                                    }
-                                }
-                            }
-
-                            if (Config.IS_SPECIAL) {
-                                Spacer(modifier = Modifier.height(20.dp))
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                ) {
-                                    PeakingKitty(
-                                        modifier = Modifier
-                                            .align(Alignment.TopEnd)
-                                            .offset(x = (-28).dp, y = (-22).dp)
-                                    )
-                                    
-                                    val primaryColor = MaterialTheme.colorScheme.primary
-                                    val tertiaryColor = MaterialTheme.colorScheme.tertiary
-                                    val quoteBorderBrush = remember(isDark, primaryColor, tertiaryColor) {
-                                        Brush.linearGradient(
-                                            colors = listOf(
-                                                primaryColor.copy(alpha = if (isDark) 0.60f else 0.35f),
-                                                tertiaryColor.copy(alpha = if (isDark) 0.35f else 0.15f)
-                                            )
-                                        )
-                                    }
-
-                                    Card(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .background(brush = primaryCardBrush, shape = ExpressiveCardShape)
-                                            .border(
-                                                width = 1.dp,
-                                                brush = quoteBorderBrush,
-                                                shape = ExpressiveCardShape
-                                            )
-                                            .clickable {
-                                                currentLoveNote = Config.LOVE_QUOTES.random()
-                                                showLoveNoteDialog = true
-                                            }
-                                            .pressScaleEffect(),
-                                        shape = ExpressiveCardShape,
-                                        colors = CardDefaults.cardColors(
-                                            containerColor = Color.Transparent
-                                        )
-                                    ) {
-                                        VibrantCardContent(settings.cardStyle) {
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(20.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(44.dp)
-                                                    .clip(CircleShape)
-                                                    .background(Color.White.copy(alpha = 0.3f)),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Favorite,
-                                                    contentDescription = null,
-                                                    tint = Color.Red,
-                                                    modifier = Modifier.size(24.dp)
-                                                )
-                                            }
-                                            Spacer(modifier = Modifier.width(16.dp))
-                                            Column {
-                                                Text(
-                                                    text = stringResource(R.string.love_notes),
-                                                    fontWeight = FontWeight.Bold,
-                                                    style = MaterialTheme.typography.titleMedium,
-                                                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                                                )
-                                                Text(
-                                                    text = stringResource(R.string.love_notes_desc),
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-                                                )
-                                            }
-                                        }
-                                        }
-                                    }
-                                }
-                                
-                                if (showLoveNoteDialog) {
-                                    AlertDialog(
-                                        onDismissRequest = { showLoveNoteDialog = false },
-                                        title = {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Favorite,
-                                                    contentDescription = null,
-                                                    tint = Color.Red
-                                                )
-                                                Spacer(modifier = Modifier.width(8.dp))
-                                                Text(stringResource(R.string.note_for_sana), fontWeight = FontWeight.Bold)
-                                            }
-                                        },
-                                        text = {
-                                            Text(
-                                                text = currentLoveNote,
-                                                style = MaterialTheme.typography.bodyLarge,
-                                                color = MaterialTheme.colorScheme.onSurface,
-                                                fontWeight = FontWeight.Medium
-                                            )
-                                        },
-                                        confirmButton = {
-                                            TextButton(onClick = { showLoveNoteDialog = false }) {
-                                                Text(stringResource(R.string.cancel))
-                                            }
-                                        },
-                                        shape = ExpressiveCardShape,
-                                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                                    )
-                                }
-                            }
                             Spacer(modifier = Modifier.height(32.dp))
                         }
                     }
@@ -1406,6 +891,47 @@ fun MainScreen(
                         val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
                         val screenWidthDp = configuration.screenWidthDp
                         val useDropdownMenu = !isLandscape || screenWidthDp < 600
+
+                        var showSubManagerDialog by remember { mutableStateOf(false) }
+                        var isGroupDropdownExpanded by remember { mutableStateOf(false) }
+                        var isCountryDropdownExpanded by remember { mutableStateOf(false) }
+                        
+                        val uniqueCountries = remember(serverList) {
+                            val list = mutableSetOf("All Countries")
+                            serverList.forEach { link ->
+                                val name = ProxyNameResolver.getProxyName(link, context)
+                                val emoji = getFlagEmoji(name)
+                                if (emoji != "🌐") {
+                                    val countryName = when (emoji) {
+                                        "🇩🇪" -> "Germany"
+                                        "🇪🇸" -> "Spain"
+                                        "🇯🇵" -> "Japan"
+                                        "🇺🇸" -> "United States"
+                                        "🇬🇧" -> "United Kingdom"
+                                        "🇫🇷" -> "France"
+                                        "🇳🇱" -> "Netherlands"
+                                        "🇸🇬" -> "Singapore"
+                                        "🇹🇷" -> "Turkey"
+                                        "🇨🇦" -> "Canada"
+                                        "🇮🇷" -> "Iran"
+                                        "🇫🇮" -> "Finland"
+                                        "🇸🇪" -> "Sweden"
+                                        "🇮🇹" -> "Italy"
+                                        "🇨🇭" -> "Switzerland"
+                                        "🇦🇪" -> "UAE"
+                                        "🇭🇰" -> "Hong Kong"
+                                        "🇰🇷" -> "Korea"
+                                        else -> ""
+                                    }
+                                    if (countryName.isNotEmpty()) list.add("$emoji $countryName")
+                                }
+                            }
+                            list.toList()
+                        }
+
+                        val subGroups = remember(subscriptions) {
+                            listOf("All Groups") + subscriptions.map { it.name }
+                        }
 
                         val subscriptionManagerCard: @Composable (Modifier, Modifier) -> Unit = { modifier, listModifier ->
                             Card(
@@ -2549,40 +2075,406 @@ fun MainScreen(
                         }
 
                         Box(modifier = Modifier.fillMaxSize()) {
-                            if (isLandscape) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(horizontal = 16.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                
+                                // Top Bento Row
                                 Row(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
-                                    subscriptionManagerCard(
-                                        Modifier.weight(1.1f).fillMaxHeight(),
-                                        Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())
-                                    )
-                                    availableNodesCard(
-                                        Modifier.weight(1f).fillMaxHeight(),
-                                        Modifier.fillMaxWidth().weight(1f)
-                                    )
+                                    // Fastest Auto-Connect Card
+                                    Card(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(100.dp)
+                                            .clip(RoundedCornerShape(28.dp))
+                                            .clickable {
+                                                if (!isTestingPings) {
+                                                    scope.launch {
+                                                        isTestingPings = true
+                                                        val jobs = serverList.map { link ->
+                                                            scope.async(kotlinx.coroutines.Dispatchers.IO) {
+                                                                val hostPort = getHostAndPortFromLink(link)
+                                                                val ping = if (hostPort != null) measurePingDelay(hostPort.first, hostPort.second) else -1
+                                                                link to ping
+                                                            }
+                                                        }
+                                                        val results = jobs.awaitAll().filter { it.second > 0 }
+                                                        isTestingPings = false
+                                                        val bestNode = results.minByOrNull { it.second }?.first
+                                                        if (bestNode != null) {
+                                                            settingsManager.setActiveProfile(bestNode)
+                                                            if (vpnState == "CONNECTED") {
+                                                                startVpnService(context)
+                                                            } else {
+                                                                val intent = VpnService.prepare(context)
+                                                                if (intent != null) {
+                                                                    vpnPermissionLauncher.launch(intent)
+                                                                } else {
+                                                                    startVpnService(context)
+                                                                }
+                                                            }
+                                                        } else {
+                                                            android.widget.Toast.makeText(context, "No responsive node found", android.widget.Toast.LENGTH_SHORT).show()
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f), RoundedCornerShape(28.dp)),
+                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                                        shape = RoundedCornerShape(28.dp)
+                                    ) {
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .padding(16.dp),
+                                            verticalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Bolt,
+                                                    contentDescription = "Fastest",
+                                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                    modifier = Modifier.size(24.dp)
+                                                )
+                                                if (isTestingPings) {
+                                                    LoadingIndicator(
+                                                        modifier = Modifier.size(16.dp),
+                                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                                    )
+                                                }
+                                            }
+                                            Column {
+                                                Text(
+                                                    text = "Fastest Node",
+                                                    style = MaterialTheme.typography.titleMedium,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                                )
+                                                Text(
+                                                    text = "Auto-Connect",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    // Subscriptions Manager Card
+                                    Card(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(100.dp)
+                                            .clip(RoundedCornerShape(28.dp))
+                                            .clickable { showSubManagerDialog = true }
+                                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f), RoundedCornerShape(28.dp)),
+                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+                                        shape = RoundedCornerShape(28.dp)
+                                    ) {
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .padding(16.dp),
+                                            verticalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Folder,
+                                                contentDescription = "Subscriptions",
+                                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                modifier = Modifier.size(24.dp)
+                                            )
+                                            Column {
+                                                Text(
+                                                    text = "Subscriptions",
+                                                    style = MaterialTheme.typography.titleMedium,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                                )
+                                                Text(
+                                                    text = "${subscriptions.size} groups",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
-                            } else {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(horizontal = 16.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally
+
+                                // Rounded Search Bar
+                                OutlinedTextField(
+                                    value = searchQuery,
+                                    onValueChange = { searchQuery = it },
+                                    placeholder = { Text("Search servers...") },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = CircleShape,
+                                    singleLine = true,
+                                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(20.dp)) },
+                                    trailingIcon = {
+                                        if (searchQuery.isNotEmpty()) {
+                                            IconButton(onClick = { searchQuery = "" }) {
+                                                Icon(Icons.Default.Clear, contentDescription = "Clear", modifier = Modifier.size(20.dp))
+                                            }
+                                        }
+                                    }
+                                )
+
+                                // Horizontal Filters Row
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                    subscriptionManagerCard(
-                                        Modifier.fillMaxWidth(),
-                                        Modifier.fillMaxWidth().heightIn(max = 140.dp).verticalScroll(rememberScrollState())
-                                    )
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                    availableNodesCard(
-                                        Modifier.fillMaxWidth().weight(1f),
-                                        Modifier.fillMaxWidth().weight(1f)
-                                    )
+                                    // Group filter chip
+                                    Box {
+                                        androidx.compose.material3.FilterChip(
+                                            selected = selectedSubGroupFilter != "All Groups",
+                                            onClick = { isGroupDropdownExpanded = true },
+                                            label = { Text(if (selectedSubGroupFilter == "All Groups") "All Groups" else selectedSubGroupFilter) }
+                                        )
+                                        DropdownMenu(
+                                            expanded = isGroupDropdownExpanded,
+                                            onDismissRequest = { isGroupDropdownExpanded = false }
+                                        ) {
+                                            subGroups.forEach { group ->
+                                                DropdownMenuItem(
+                                                    text = { Text(group) },
+                                                    onClick = {
+                                                        selectedSubGroupFilter = group
+                                                        isGroupDropdownExpanded = false
+                                                    }
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    // Country filter chip
+                                    Box {
+                                        androidx.compose.material3.FilterChip(
+                                            selected = selectedCountryFilter != "All Countries",
+                                            onClick = { isCountryDropdownExpanded = true },
+                                            label = { Text(if (selectedCountryFilter == "All Countries") "All Countries" else selectedCountryFilter) }
+                                        )
+                                        DropdownMenu(
+                                            expanded = isCountryDropdownExpanded,
+                                            onDismissRequest = { isCountryDropdownExpanded = false }
+                                        ) {
+                                            uniqueCountries.forEach { country ->
+                                                DropdownMenuItem(
+                                                    text = { Text(country) },
+                                                    onClick = {
+                                                        selectedCountryFilter = country
+                                                        isCountryDropdownExpanded = false
+                                                    }
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
+
+                                // Protocols tab row
+                                ScrollableTabRow(
+                                    selectedTabIndex = selectedTab,
+                                    edgePadding = 0.dp,
+                                    containerColor = Color.Transparent,
+                                    contentColor = MaterialTheme.colorScheme.primary,
+                                    indicator = { tabPositions ->
+                                        if (selectedTab < tabPositions.size) {
+                                            TabRowDefaults.SecondaryIndicator(
+                                                Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                    },
+                                    divider = {}
+                                ) {
+                                    listOf("All", "VLESS", "Trojan", "Shadowsocks", "VMess", "Hysteria", "TUIC").forEachIndexed { index, title ->
+                                        Tab(
+                                            selected = selectedTab == index,
+                                            onClick = { selectedTab = index },
+                                            text = { 
+                                                Text(
+                                                    text = title, 
+                                                    fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal,
+                                                    color = if (selectedTab == index) MaterialTheme.colorScheme.primary
+                                                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                                    fontSize = 13.sp
+                                                ) 
+                                            }
+                                        )
+                                    }
+                                }
+
+                                // Servers List
+                                if (filteredServerList.isEmpty()) {
+                                    Box(
+                                        modifier = Modifier.fillMaxWidth().weight(1f),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = stringResource(R.string.no_matching_nodes),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                } else {
+                                    LazyColumn(
+                                        modifier = Modifier.fillMaxWidth().weight(1f),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        itemsIndexed(filteredServerList, key = { index, item -> "${item.link}_$index" }) { index, serverItem ->
+                                            val serverLink = serverItem.link
+                                            val isSelected = activeProfile == serverLink
+                                            val name = serverItem.name
+                                            val type = serverItem.type
+                                            val flagEmoji = remember(name) { getFlagEmoji(name) }
+                                            val ping = pingsMap[serverLink]
+                                            val isTimeout = ping != null && ping < 0
+                                            
+                                            Card(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clip(RoundedCornerShape(16.dp))
+                                                    .clickable {
+                                                        scope.launch {
+                                                            settingsManager.setActiveProfile(serverLink)
+                                                            if (vpnState == "CONNECTED") {
+                                                                startVpnService(context)
+                                                            }
+                                                        }
+                                                    }
+                                                    .border(
+                                                        width = if (isSelected) 2.dp else 1.dp,
+                                                        color = if (isSelected) MaterialTheme.colorScheme.primary
+                                                                else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f),
+                                                        shape = RoundedCornerShape(16.dp)
+                                                    ),
+                                                colors = CardDefaults.cardColors(
+                                                    containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f)
+                                                                     else MaterialTheme.colorScheme.surface
+                                                )
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .padding(12.dp),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Row(
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        modifier = Modifier.weight(1f)
+                                                    ) {
+                                                        Box(
+                                                            modifier = Modifier
+                                                                .size(40.dp)
+                                                                .background(MaterialTheme.colorScheme.secondaryContainer, shape = CircleShape),
+                                                            contentAlignment = Alignment.Center
+                                                        ) {
+                                                            Text(
+                                                                text = flagEmoji,
+                                                                style = MaterialTheme.typography.titleMedium
+                                                            )
+                                                        }
+                                                        Spacer(modifier = Modifier.width(12.dp))
+                                                        Column {
+                                                            Text(
+                                                                text = name,
+                                                                style = MaterialTheme.typography.bodyMedium,
+                                                                fontWeight = FontWeight.Bold,
+                                                                color = MaterialTheme.colorScheme.onSurface,
+                                                                maxLines = 1,
+                                                                overflow = TextOverflow.Ellipsis
+                                                            )
+                                                            Text(
+                                                                text = type,
+                                                                style = MaterialTheme.typography.labelSmall,
+                                                                color = MaterialTheme.colorScheme.primary,
+                                                                fontWeight = FontWeight.Bold
+                                                            )
+                                                        }
+                                                    }
+                                                    
+                                                    Row(
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                                    ) {
+                                                        if (ping != null) {
+                                                            val pingColor = if (isTimeout) Color.Red else if (ping < 150) Color.Green else Color.Yellow
+                                                            Box(
+                                                                modifier = Modifier
+                                                                    .background(pingColor.copy(alpha = 0.15f), shape = RoundedCornerShape(8.dp))
+                                                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                                                            ) {
+                                                                Text(
+                                                                    text = if (isTimeout) "Timeout" else "${ping}ms",
+                                                                    style = MaterialTheme.typography.labelSmall,
+                                                                    color = pingColor,
+                                                                    fontWeight = FontWeight.Bold
+                                                                )
+                                                            }
+                                                        }
+                                                        
+                                                        var menuExpanded by remember { mutableStateOf(false) }
+                                                        Box {
+                                                            IconButton(onClick = { menuExpanded = true }) {
+                                                                Icon(
+                                                                    imageVector = Icons.Default.MoreVert,
+                                                                    contentDescription = "Options",
+                                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                                                )
+                                                            }
+                                                            DropdownMenu(
+                                                                expanded = menuExpanded,
+                                                                onDismissRequest = { menuExpanded = false }
+                                                            ) {
+                                                                DropdownMenuItem(
+                                                                    text = { Text("Delete") },
+                                                                    onClick = {
+                                                                        menuExpanded = false
+                                                                        scope.launch {
+                                                                            val currentManual = manualServersStr.split("\n").filter { it.isNotEmpty() }
+                                                                            val updatedManualList = currentManual.filter { it != serverLink }
+                                                                            settingsManager.setManualServers(updatedManualList.joinToString("\n"))
+                                                                            
+                                                                            if (serverLink.startsWith("chain://")) {
+                                                                                val chainId = serverLink.substringAfter("chain://").substringBefore("#")
+                                                                                val currentChains = deserializeProxyChains(settings.proxyChains)
+                                                                                val updatedChains = currentChains.filter { it.id != chainId }
+                                                                                settingsManager.setProxyChains(serializeProxyChains(updatedChains))
+                                                                            }
+                                                                            
+                                                                            val currentCam = deserializeCamouflageSettings(settings.camouflageSettings)
+                                                                            val updatedCam = currentCam.filter { it.nodeLink.substringBefore("#") != serverLink.substringBefore("#") }
+                                                                            settingsManager.setCamouflageSettings(serializeCamouflageSettings(updatedCam))
+                                                                            
+                                                                            if (isSelected) {
+                                                                                val nextActive = updatedManualList.firstOrNull() ?: ""
+                                                                                settingsManager.setActiveProfile(nextActive)
+                                                                                if (vpnState == "CONNECTED" && nextActive.isNotEmpty()) {
+                                                                                    startVpnService(context)
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                )
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(80.dp))
                             }
 
                             androidx.compose.material3.ExtendedFloatingActionButton(
@@ -2598,6 +2490,23 @@ fun MainScreen(
                                 Icon(imageVector = Icons.Default.Link, contentDescription = null)
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(stringResource(R.string.chain_str))
+                            }
+
+                            if (showSubManagerDialog) {
+                                androidx.compose.ui.window.Dialog(onDismissRequest = { showSubManagerDialog = false }) {
+                                    Card(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .fillMaxHeight(0.85f),
+                                        shape = RoundedCornerShape(28.dp),
+                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                                    ) {
+                                        subscriptionManagerCard(
+                                            Modifier.fillMaxSize(),
+                                            Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -4671,6 +4580,31 @@ fun MainScreen(
     }
 }
 
+fun getFlagEmoji(serverName: String): String {
+    val name = serverName.lowercase()
+    return when {
+        name.contains("germany") || name.contains("de") || name.contains("frankfurt") -> "🇩🇪"
+        name.contains("spain") || name.contains("es") || name.contains("madrid") || name.contains("barcelona") -> "🇪🇸"
+        name.contains("japan") || name.contains("jp") || name.contains("tokyo") || name.contains("osaka") -> "🇯🇵"
+        name.contains("united states") || name.contains("us") || name.contains("new%20york") || name.contains("new york") || name.contains("chicago") || name.contains("los angeles") -> "🇺🇸"
+        name.contains("united kingdom") || name.contains("uk") || name.contains("london") -> "🇬🇧"
+        name.contains("france") || name.contains("fr") || name.contains("paris") -> "🇫🇷"
+        name.contains("netherlands") || name.contains("nl") || name.contains("amsterdam") -> "🇳🇱"
+        name.contains("singapore") || name.contains("sg") -> "🇸🇬"
+        name.contains("turkey") || name.contains("tr") || name.contains("istanbul") -> "🇹🇷"
+        name.contains("canada") || name.contains("ca") || name.contains("toronto") -> "🇨🇦"
+        name.contains("iran") || name.contains("ir") || name.contains("tehran") -> "🇮🇷"
+        name.contains("finland") || name.contains("fi") || name.contains("helsinki") -> "🇫🇮"
+        name.contains("sweden") || name.contains("se") || name.contains("stockholm") -> "🇸🇪"
+        name.contains("italy") || name.contains("it") || name.contains("milan") || name.contains("rome") -> "🇮🇹"
+        name.contains("switzerland") || name.contains("ch") || name.contains("zurich") -> "🇨🇭"
+        name.contains("uae") || name.contains("dubai") -> "🇦🇪"
+        name.contains("hong kong") || name.contains("hk") -> "🇭🇰"
+        name.contains("korea") || name.contains("kr") || name.contains("seoul") -> "🇰🇷"
+        else -> "🌐"
+    }
+}
+
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ConnectionDashboard(
@@ -4678,57 +4612,46 @@ fun ConnectionDashboard(
     cardStyle: String,
     isDark: Boolean,
     delayTestUrl: String,
-    onConnectToggle: () -> Unit
+    activeProfile: String,
+    activeSubId: String,
+    subscriptions: List<com.hambalapps.expressivebox.data.Subscription>,
+    vpnMode: String,
+    vpnModeTunnelGames: Boolean,
+    settingsManager: SettingsManager,
+    scope: CoroutineScope,
+    onConnectToggle: () -> Unit,
+    onNavigateToServers: () -> Unit
 ) {
     val context = LocalContext.current
     val transition = updateTransition(targetState = state, label = "VPNStateTransition")
 
-    val stateText = if (Config.IS_SPECIAL) {
-        when (state) {
-            "CONNECTED" -> "Meow"
-            "CONNECTING" -> "CONNECTING TO YOUR HEART... 💓"
-            "DISCONNECTING" -> "DISCONNECTING... 💔"
-            else -> "OFFLINE, BUT THINKING OF YOU 💔"
-        }
+    val stateText = when (state) {
+        "CONNECTED" -> "SECURED"
+        "CONNECTING" -> "CONNECTING..."
+        "DISCONNECTING" -> "DISCONNECTING..."
+        else -> "UNPROTECTED"
+    }
+
+    val isVpnActive = state == "CONNECTED" || state == "CONNECTING"
+    
+    val containerColor = if (isVpnActive) {
+        MaterialTheme.colorScheme.primaryContainer
     } else {
-        when (state) {
-            "CONNECTED" -> "SECURED"
-            "CONNECTING" -> "SHIELD ACTIVE..."
-            "DISCONNECTING" -> "DISCONNECTING..."
-            else -> "UNPROTECTED"
-        }
+        MaterialTheme.colorScheme.secondaryContainer
     }
-
-    val containerColor = when (state) {
-        "CONNECTED" -> MaterialTheme.colorScheme.primaryContainer
-        "CONNECTING" -> MaterialTheme.colorScheme.secondaryContainer
-        "DISCONNECTING" -> MaterialTheme.colorScheme.errorContainer
-        else -> MaterialTheme.colorScheme.surfaceVariant
-    }
-
-    val contentColor = when (state) {
-        "CONNECTED" -> MaterialTheme.colorScheme.onPrimaryContainer
-        "CONNECTING" -> MaterialTheme.colorScheme.onSecondaryContainer
-        "DISCONNECTING" -> MaterialTheme.colorScheme.onErrorContainer
-        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    
+    val contentColor = if (isVpnActive) {
+        MaterialTheme.colorScheme.onPrimaryContainer
+    } else {
+        MaterialTheme.colorScheme.onSecondaryContainer
     }
 
     val buttonColor by transition.animateColor(label = "ButtonColor") { s ->
-        when (s) {
-            "CONNECTED" -> MaterialTheme.colorScheme.primary
-            "CONNECTING" -> MaterialTheme.colorScheme.secondary
-            "DISCONNECTING" -> MaterialTheme.colorScheme.error
-            else -> MaterialTheme.colorScheme.surfaceVariant
-        }
+        if (s == "CONNECTED" || s == "CONNECTING") Color.White else MaterialTheme.colorScheme.primary
     }
 
     val buttonIconColor by transition.animateColor(label = "ButtonIconColor") { s ->
-        when (s) {
-            "CONNECTED" -> MaterialTheme.colorScheme.onPrimary
-            "CONNECTING" -> MaterialTheme.colorScheme.onSecondary
-            "DISCONNECTING" -> MaterialTheme.colorScheme.onError
-            else -> MaterialTheme.colorScheme.onSurfaceVariant
-        }
+        if (s == "CONNECTED" || s == "CONNECTING") MaterialTheme.colorScheme.primary else Color.White
     }
 
     val pulseScaleState = remember { androidx.compose.animation.core.Animatable(1.0f) }
@@ -4736,9 +4659,9 @@ fun ConnectionDashboard(
     LaunchedEffect(isPulseActive) {
         if (isPulseActive) {
             pulseScaleState.animateTo(
-                targetValue = 1.06f,
+                targetValue = 1.08f,
                 animationSpec = infiniteRepeatable(
-                    animation = tween(1000, easing = FastOutSlowInEasing),
+                    animation = tween(1200, easing = FastOutSlowInEasing),
                     repeatMode = RepeatMode.Reverse
                 )
             )
@@ -4752,15 +4675,12 @@ fun ConnectionDashboard(
         label = "ButtonScale",
         transitionSpec = { spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow) }
     ) { s ->
-        if (s == "CONNECTED") 1.06f else 1.0f
+        if (s == "CONNECTED") 1.05f else 1.0f
     }
 
     val finalScale = if (state == "CONNECTING") pulseScale else scaleFactor
 
-    var downloadSpeed by remember { mutableStateOf("0.0 KB/s") }
-    var uploadSpeed by remember { mutableStateOf("0.0 KB/s") }
-    var pingTime by remember { mutableStateOf("0 ms") }
-    val downloadSpeedHistory = remember { mutableStateListOf<Float>() }
+    var pingTime by remember { mutableStateOf("--") }
     
     LaunchedEffect(state, delayTestUrl) {
         if (state == "CONNECTED") {
@@ -4778,7 +4698,7 @@ fun ConnectionDashboard(
                         connection.instanceFollowRedirects = false
                         val responseCode = connection.responseCode
                         val elapsed = System.currentTimeMillis() - startTime
-                        "${elapsed} ms"
+                        "${elapsed}ms"
                     } catch (e: Exception) {
                         "Timeout"
                     } finally {
@@ -4791,355 +4711,494 @@ fun ConnectionDashboard(
                     kotlinx.coroutines.delay(10000)
                 }
             }
-            
-            var lastRx = android.net.TrafficStats.getTotalRxBytes()
-            var lastTx = android.net.TrafficStats.getTotalTxBytes()
-            var lastTime = System.currentTimeMillis()
-
-            while (true) {
-                kotlinx.coroutines.delay(1000)
-                val currentRx = android.net.TrafficStats.getTotalRxBytes()
-                val currentTx = android.net.TrafficStats.getTotalTxBytes()
-                val currentTime = System.currentTimeMillis()
-                
-                val dt = (currentTime - lastTime) / 1000.0
-                if (dt > 0.0) {
-                    val dlBytes = currentRx - lastRx
-                    val ulBytes = currentTx - lastTx
-                    
-                    val formatSpeed = { bytesPerSec: Long ->
-                        val kb = bytesPerSec / 1024.0
-                        val mb = kb / 1024.0
-                        when {
-                            mb >= 1.0 -> String.format(java.util.Locale.US, "%.1f MB/s", mb)
-                            kb >= 0.1 -> String.format(java.util.Locale.US, "%.1f KB/s", kb)
-                            else -> "0.0 KB/s"
-                        }
-                    }
-                    val dlB = if (dlBytes >= 0) (dlBytes / dt).toLong() else 0L
-                    downloadSpeed = formatSpeed(dlB)
-                    uploadSpeed = formatSpeed(if (ulBytes >= 0) (ulBytes / dt).toLong() else 0L)
-                    
-                    // Add to history (in KB/s)
-                    val kbVal = dlB / 1024f
-                    downloadSpeedHistory.add(kbVal)
-                    if (downloadSpeedHistory.size > 20) {
-                        downloadSpeedHistory.removeAt(0)
-                    }
-                }
-                lastRx = currentRx
-                lastTx = currentTx
-                lastTime = currentTime
-            }
         } else {
-            downloadSpeed = "0.0 KB/s"
-            uploadSpeed = "0.0 KB/s"
             pingTime = "--"
-            downloadSpeedHistory.clear()
         }
     }
 
-    val cardBackground = if (isDark) Color.Black else Color(0xFFF7F9FB)
-    val primaryColor = MaterialTheme.colorScheme.primary
-    val secondaryColor = MaterialTheme.colorScheme.secondary
-    val tertiaryColor = MaterialTheme.colorScheme.tertiary
-    val surfaceContainerHigh = MaterialTheme.colorScheme.surfaceContainerHigh
-    val outlineVariant = MaterialTheme.colorScheme.outlineVariant
-    val primaryContainer = MaterialTheme.colorScheme.primaryContainer
-
-    val cardBorderBrush = remember(isDark, cardStyle, primaryColor, secondaryColor, outlineVariant) {
-        if (cardStyle == "solid" || cardStyle == "vibrant") {
-            SolidColor(outlineVariant)
-        } else {
-            val colors = listOf(
-                primaryColor.copy(alpha = if (isDark) 0.60f else 0.18f),
-                secondaryColor.copy(alpha = if (isDark) 0.40f else 0.06f)
-            )
-            Brush.linearGradient(colors = colors)
-        }
+    val activeSubscription = remember(subscriptions, activeSubId) {
+        subscriptions.find { it.id == activeSubId } ?: subscriptions.firstOrNull()
     }
-
-    val primaryCardBrush = remember(isDark, cardStyle, primaryColor, secondaryColor, surfaceContainerHigh, primaryContainer) {
-        if (cardStyle == "solid") {
-            SolidColor(surfaceContainerHigh)
-        } else if (cardStyle == "vibrant") {
-            SolidColor(primaryContainer)
-        } else {
-            val colors = if (isDark) {
-                listOf(
-                    primaryColor.copy(alpha = 0.55f),
-                    secondaryColor.copy(alpha = 0.28f)
-                )
-            } else {
-                listOf(
-                    primaryColor.copy(alpha = 0.18f),
-                    surfaceContainerHigh
-                )
-            }
-            Brush.linearGradient(colors = colors)
-        }
+    val activeSubName = activeSubscription?.name ?: "Manual"
+    val serverName = if (activeProfile.isEmpty()) {
+        stringResource(R.string.no_profile_active)
+    } else if (activeProfile.startsWith("{")) {
+        stringResource(R.string.custom_json)
+    } else {
+        ProxyNameResolver.getProxyName(activeProfile, context)
     }
-
-    // Active Card background animation (only runs when connected/connecting to save CPU)
-    val flowOffsetState = remember { androidx.compose.animation.core.Animatable(0f) }
-    val isVpnActive = state == "CONNECTED" || state == "CONNECTING"
-    LaunchedEffect(isVpnActive) {
-        if (isVpnActive) {
-            flowOffsetState.animateTo(
-                targetValue = 1000f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(durationMillis = 6000, easing = LinearEasing),
-                    repeatMode = RepeatMode.Reverse
-                )
-            )
-        } else {
-            flowOffsetState.snapTo(0f)
-        }
+    val protocolName = if (activeProfile.isEmpty()) {
+        ""
+    } else if (activeProfile.startsWith("{")) {
+        "JSON"
+    } else {
+        activeProfile.substringBefore("://").uppercase()
     }
-    val flowOffset = flowOffsetState.value
+    val flagEmoji = remember(serverName) { getFlagEmoji(serverName) }
 
-    val activeCardBackgroundBrush = remember(isDark, cardStyle, primaryColor, secondaryColor, tertiaryColor, primaryContainer, flowOffset) {
-        if (cardStyle == "solid") {
-            SolidColor(primaryContainer)
-        } else if (cardStyle == "vibrant") {
-            Brush.linearGradient(
-                colors = listOf(primaryColor, secondaryColor),
-                start = Offset(flowOffset - 500f, 0f),
-                end = Offset(flowOffset + 500f, 1000f)
-            )
-        } else {
-            val colors = if (isDark) {
-                listOf(
-                    primaryColor.copy(alpha = 0.68f),
-                    secondaryColor.copy(alpha = 0.50f),
-                    tertiaryColor.copy(alpha = 0.30f)
-                )
-            } else {
-                listOf(
-                    primaryColor.copy(alpha = 0.25f),
-                    secondaryColor.copy(alpha = 0.15f),
-                    Color.White
-                )
-            }
-            Brush.linearGradient(
-                colors = colors,
-                start = Offset(flowOffset - 500f, 0f),
-                end = Offset(flowOffset + 500f, 1000f)
-            )
-        }
-    }
-
-    Card(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .background(
-                brush = if (state == "CONNECTED" || state == "CONNECTING") activeCardBackgroundBrush else primaryCardBrush,
-                shape = ExpressiveCardShape
-            )
-            .border(
-                width = 1.dp,
-                brush = cardBorderBrush,
-                shape = ExpressiveCardShape
-            ),
-        shape = ExpressiveCardShape,
-        colors = CardDefaults.cardColors(
-            containerColor = Color.Transparent
-        )
+            .padding(horizontal = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        VibrantCardContent(cardStyle) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
+        Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 24.dp, horizontal = 16.dp)
+                .clip(RoundedCornerShape(32.dp))
+                .clickable { onConnectToggle() }
+                .border(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f),
+                    shape = RoundedCornerShape(32.dp)
+                ),
+            shape = RoundedCornerShape(32.dp),
+            colors = CardDefaults.cardColors(containerColor = containerColor)
         ) {
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier.size(180.dp)
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 32.dp, horizontal = 16.dp)
             ) {
-                if (state == "CONNECTED" || state == "CONNECTING") {
-                    WaveVisualizer(
-                        state = state,
-                        primaryColor = MaterialTheme.colorScheme.primary,
-                        secondaryColor = MaterialTheme.colorScheme.secondary,
-                        modifier = Modifier.size(180.dp)
-                    )
-                }
-
                 Box(
                     contentAlignment = Alignment.Center,
-                    modifier = Modifier
-                        .size(116.dp)
-                        .graphicsLayer {
-                            scaleX = finalScale
-                            scaleY = finalScale
-                        }
-                        .pressScaleEffect()
-                        .clip(CircleShape)
-                        .background(buttonColor)
-                        .clickable { onConnectToggle() }
-                        .border(
-                            width = 1.dp,
-                            color = MaterialTheme.colorScheme.outlineVariant,
-                            shape = CircleShape
-                        )
+                    modifier = Modifier.size(180.dp)
                 ) {
-                    if (state == "CONNECTING") {
-                        LoadingIndicator(
-                            modifier = Modifier.size(56.dp),
-                            color = buttonIconColor
-                        )
-                    } else {
-                        Icon(
-                            imageVector = if (state == "CONNECTED") Icons.Default.Shield else Icons.Default.PowerSettingsNew,
-                            contentDescription = stringResource(R.string.connect_toggle),
-                            tint = buttonIconColor,
-                            modifier = Modifier.size(40.dp)
+                    if (state == "CONNECTED" || state == "CONNECTING") {
+                        WaveVisualizer(
+                            state = state,
+                            primaryColor = MaterialTheme.colorScheme.primary,
+                            secondaryColor = MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier.size(180.dp)
                         )
                     }
-                }
-            }
 
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(32.dp))
-                    .background(containerColor)
-                    .padding(horizontal = 20.dp, vertical = 6.dp)
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (Config.IS_SPECIAL) {
-                        PawPrint(
-                            modifier = Modifier.size(16.dp),
-                            color = if (state == "CONNECTED") MaterialTheme.colorScheme.primary 
-                                    else if (state == "CONNECTING") MaterialTheme.colorScheme.secondary
-                                    else MaterialTheme.colorScheme.outline
-                        )
-                    } else {
+                    if (isVpnActive) {
                         Box(
                             modifier = Modifier
-                                .size(8.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    if (state == "CONNECTED") MaterialTheme.colorScheme.primary 
-                                    else if (state == "CONNECTING") MaterialTheme.colorScheme.secondary
-                                    else MaterialTheme.colorScheme.outline
-                                )
+                                .size(136.dp)
+                                .graphicsLayer {
+                                    scaleX = finalScale * pulseScale
+                                    scaleY = finalScale * pulseScale
+                                    alpha = 0.15f
+                                }
+                                .background(MaterialTheme.colorScheme.primary, shape = CircleShape)
                         )
                     }
-                    Spacer(modifier = Modifier.width(8.dp))
+
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .size(116.dp)
+                            .graphicsLayer {
+                                scaleX = finalScale
+                                scaleY = finalScale
+                            }
+                            .pressScaleEffect()
+                            .clip(CircleShape)
+                            .background(buttonColor)
+                            .border(
+                                width = 2.dp,
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                                shape = CircleShape
+                            )
+                    ) {
+                        if (state == "CONNECTING") {
+                            LoadingIndicator(
+                                modifier = Modifier.size(56.dp),
+                                color = buttonIconColor
+                            )
+                        } else {
+                            Icon(
+                                imageVector = if (state == "CONNECTED") Icons.Default.Shield else Icons.Default.PowerSettingsNew,
+                                contentDescription = stringResource(R.string.connect_toggle),
+                                tint = buttonIconColor,
+                                modifier = Modifier.size(40.dp)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text(
+                    text = stateText,
+                    color = contentColor,
+                    fontWeight = FontWeight.Black,
+                    style = MaterialTheme.typography.titleMedium,
+                    letterSpacing = 2.sp
+                )
+
+                if (state == "CONNECTED") {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    val durationVal = remember { mutableStateOf("00:00:00") }
+                    val serviceManager = VpnServiceWrapper.vpnState
+                    LaunchedEffect(state) {
+                        val startTime = System.currentTimeMillis()
+                        while (serviceManager.value == "CONNECTED") {
+                            val elapsed = System.currentTimeMillis() - startTime
+                            val sec = (elapsed / 1000) % 60
+                            val min = (elapsed / (1000 * 60)) % 60
+                            val hr = elapsed / (1000 * 60 * 60)
+                            durationVal.value = String.format(java.util.Locale.US, "%02d:%02d:%02d", hr, min, sec)
+                            kotlinx.coroutines.delay(1000)
+                        }
+                    }
                     Text(
-                        text = stateText,
-                        color = contentColor,
-                        fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.labelLarge,
-                        letterSpacing = 1.sp
+                        text = durationVal.value,
+                        style = MaterialTheme.typography.headlineLarge.copy(
+                            fontSize = 32.sp,
+                            fontWeight = FontWeight.Black,
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                        ),
+                        color = contentColor.copy(alpha = 0.9f)
                     )
                 }
             }
+        }
 
-            Spacer(modifier = Modifier.height(20.dp))
-
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(32.dp))
+                .clickable { onNavigateToServers() }
+                .border(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f),
+                    shape = RoundedCornerShape(32.dp)
+                ),
+            shape = RoundedCornerShape(32.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+        ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(ExpressiveButtonShape)
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
-                    .padding(vertical = 12.dp, horizontal = 16.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
+                    .padding(horizontal = 20.dp, vertical = 18.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = "PING",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = pingTime,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-
-                Box(
-                    modifier = Modifier
-                        .height(24.dp)
-                        .width(1.dp)
-                        .background(MaterialTheme.colorScheme.outlineVariant)
-                )
-
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.ArrowDownward,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(12.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "DOWNLOAD",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Text(
-                        text = downloadSpeed,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-
-                Box(
-                    modifier = Modifier
-                        .height(24.dp)
-                        .width(1.dp)
-                        .background(MaterialTheme.colorScheme.outlineVariant)
-                )
-
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.ArrowUpward,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.secondary,
-                            modifier = Modifier.size(12.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "UPLOAD",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Text(
-                        text = uploadSpeed,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-            }
-
-            AnimatedVisibility(visible = state == "CONNECTED" && downloadSpeedHistory.isNotEmpty()) {
-                Column {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    BandwidthSpeedGraph(
-                        history = downloadSpeedHistory,
-                        primaryColor = MaterialTheme.colorScheme.primary,
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Box(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .height(60.dp)
-                            .padding(horizontal = 8.dp)
+                            .size(48.dp)
+                            .background(Color.White.copy(alpha = 0.6f), shape = CircleShape)
+                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Dns,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column {
+                        Text(
+                            text = activeSubName,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f),
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.5.sp
+                        )
+                        Text(
+                            text = serverName,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .background(Color.White.copy(alpha = 0.7f), shape = CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ChevronRight,
+                        contentDescription = "Select Server",
+                        tint = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }
         }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Card(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(32.dp))
+                    .border(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f),
+                        shape = RoundedCornerShape(32.dp)
+                    ),
+                shape = RoundedCornerShape(32.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .padding(18.dp)
+                        .height(86.dp),
+                    verticalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .background(Color.White.copy(alpha = 0.6f), shape = CircleShape)
+                            .padding(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Speed,
+                            contentDescription = "Ping",
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Column {
+                        Text(
+                            text = "PING",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f),
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.5.sp
+                        )
+                        Text(
+                            text = pingTime,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Black,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    }
+                }
+            }
+
+            Card(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(32.dp))
+                    .border(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f),
+                        shape = RoundedCornerShape(32.dp)
+                    ),
+                shape = RoundedCornerShape(32.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .padding(18.dp)
+                        .height(86.dp),
+                    verticalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .background(Color.White.copy(alpha = 0.6f), shape = CircleShape)
+                                .padding(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Shield,
+                                contentDescription = "Protocol",
+                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        if (state == "CONNECTED" && flagEmoji != "🌐") {
+                            Text(
+                                text = flagEmoji,
+                                style = MaterialTheme.typography.titleLarge
+                            )
+                        }
+                    }
+                    Column {
+                        Text(
+                            text = "PROTOCOL",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f),
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.5.sp
+                        )
+                        Text(
+                            text = if (protocolName.isEmpty()) "NONE" else protocolName,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Black,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+        }
+
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(32.dp))
+                .border(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f),
+                    shape = RoundedCornerShape(32.dp)
+                ),
+            shape = RoundedCornerShape(32.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 14.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .background(Color.White.copy(alpha = 0.6f), shape = CircleShape)
+                            .padding(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.SmartToy,
+                            contentDescription = "AI-Bypass",
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column {
+                        Text(
+                            text = "AI-Bypass",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                        Text(
+                            text = "Smart routing active",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                        )
+                    }
+                }
+                Switch(
+                    checked = vpnMode == "ai_bypass",
+                    onCheckedChange = { checked ->
+                        scope.launch {
+                            if (checked) {
+                                val privateKey = settingsManager.settings.first().warpPrivateKey
+                                val clientId = settingsManager.settings.first().warpClientId
+                                if (privateKey.isEmpty() || clientId.isEmpty()) {
+                                    val creds = com.hambalapps.expressivebox.vpn.registerWarpAccount()
+                                    if (creds != null) {
+                                        settingsManager.setWarpCredentials(creds.privateKey, creds.publicKey, creds.ipAddress, creds.clientId)
+                                        settingsManager.setVpnMode("ai_bypass")
+                                        if (state == "CONNECTED") {
+                                            startVpnService(context)
+                                        }
+                                    } else {
+                                        android.widget.Toast.makeText(context, "WARP registration failed", android.widget.Toast.LENGTH_LONG).show()
+                                    }
+                                } else {
+                                    settingsManager.setVpnMode("ai_bypass")
+                                    if (state == "CONNECTED") {
+                                        startVpnService(context)
+                                    }
+                                }
+                            } else {
+                                settingsManager.setVpnMode("standard")
+                                if (state == "CONNECTED") {
+                                    startVpnService(context)
+                                }
+                            }
+                        }
+                    }
+                )
+            }
+        }
+
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(32.dp))
+                .border(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f),
+                    shape = RoundedCornerShape(32.dp)
+                ),
+            shape = RoundedCornerShape(32.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 14.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .background(Color.White.copy(alpha = 0.6f), shape = CircleShape)
+                            .padding(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.SportsEsports,
+                            contentDescription = "Gaming Mode",
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column {
+                        Text(
+                            text = "Gaming Mode",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                        Text(
+                            text = "Lowest latency routing",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                        )
+                    }
+                }
+                Switch(
+                    checked = vpnMode == "gaming",
+                    onCheckedChange = { checked ->
+                        scope.launch {
+                            if (checked) {
+                                settingsManager.setVpnMode("gaming")
+                            } else {
+                                settingsManager.setVpnMode("standard")
+                            }
+                            if (state == "CONNECTED") {
+                                startVpnService(context)
+                            }
+                        }
+                    }
+                )
+            }
         }
     }
 }
@@ -5909,21 +5968,17 @@ private fun LogsConsole(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .height(280.dp)
-            .background(brush = tertiaryCardBrush, shape = ExpressiveCardShape)
             .border(
                 width = 1.dp,
-                brush = cardBorderBrush,
+                color = Color(0xFF33FF33).copy(alpha = 0.3f),
                 shape = ExpressiveCardShape
             ),
         shape = ExpressiveCardShape,
         colors = CardDefaults.cardColors(
-            containerColor = Color.Transparent
+            containerColor = Color(0xFF121212)
         )
     ) {
-        VibrantCardContent(cardStyle) {
-            Column(modifier = Modifier.padding(18.dp)) {
+        Column(modifier = Modifier.padding(18.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -5933,41 +5988,48 @@ private fun LogsConsole(
                     Icon(
                         imageVector = Icons.Default.Terminal,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(18.dp)
+                        tint = Color(0xFF00FF66),
+                        modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = stringResource(R.string.engine_logs),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = Color(0xFF00FF66),
                         fontWeight = FontWeight.Bold,
                         fontFamily = FontFamily.Monospace,
-                        style = MaterialTheme.typography.bodyMedium
+                        style = MaterialTheme.typography.titleMedium
                     )
                 }
-                Row {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     TextButton(
                         onClick = {
                             val clipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
                             val logsToCopy = filteredLogLines.joinToString("\n")
                             val clip = android.content.ClipData.newPlainText("VPN Logs", logsToCopy)
                             clipboardManager.setPrimaryClip(clip)
+                            android.widget.Toast.makeText(context, "Copied to Clipboard", android.widget.Toast.LENGTH_SHORT).show()
                         },
-                        modifier = Modifier.pressScaleEffect()
+                        modifier = Modifier.pressScaleEffect(),
+                        colors = ButtonDefaults.textButtonColors(contentColor = Color(0xFF00FF66))
                     ) {
-                        Text(stringResource(R.string.copy))
+                        Icon(imageVector = Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(stringResource(R.string.copy), fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
                     }
-                    Spacer(modifier = Modifier.width(4.dp))
                     TextButton(
                         onClick = { VpnServiceWrapper.clearLogs() },
-                        modifier = Modifier.pressScaleEffect()
+                        modifier = Modifier.pressScaleEffect(),
+                        colors = ButtonDefaults.textButtonColors(contentColor = Color(0xFFFF3333))
                     ) {
-                        Text(stringResource(R.string.clear))
+                        Icon(imageVector = Icons.Default.DeleteSweep, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(stringResource(R.string.clear), fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
                     }
                 }
             }
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(8.dp))
+            HorizontalDivider(color = Color(0xFF33FF33).copy(alpha = 0.2f))
+            Spacer(modifier = Modifier.height(10.dp))
 
             // Log level filter chips
             val filterLevels = listOf("ALL", "INFO", "WARN", "ERROR", "DEBUG")
@@ -5979,9 +6041,9 @@ private fun LogsConsole(
             ) {
                 filterLevels.forEach { level ->
                     val isSelected = selectedFilter == level
-                    val chipBg = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else Color.Transparent
-                    val chipText = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                    val chipBorder = if (isSelected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    val chipBg = if (isSelected) Color(0xFF00FF66).copy(alpha = 0.15f) else Color.Transparent
+                    val chipText = if (isSelected) Color(0xFF00FF66) else Color.Gray
+                    val chipBorder = if (isSelected) BorderStroke(1.dp, Color(0xFF00FF66)) else BorderStroke(1.dp, Color.DarkGray)
                     
                     Surface(
                         shape = RoundedCornerShape(12.dp),
@@ -5995,15 +6057,15 @@ private fun LogsConsole(
                         Text(
                             text = level,
                             color = chipText,
-                            fontSize = 10.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Monospace,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
                         )
                     }
                 }
             }
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(12.dp))
             
             val listState = rememberLazyListState()
             LaunchedEffect(filteredLogLines.size) {
@@ -6012,34 +6074,48 @@ private fun LogsConsole(
                 }
             }
             
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(2.dp)
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .weight(1f)
+                    .background(Color(0xFF0A0A0A), shape = RoundedCornerShape(16.dp))
+                    .border(1.dp, Color(0xFF33FF33).copy(alpha = 0.1f), RoundedCornerShape(16.dp))
+                    .padding(12.dp)
             ) {
-                if (filteredLogLines.isEmpty()) {
-                    item {
-                        Text(
-                            text = if (logLines.isEmpty()) stringResource(R.string.logs_placeholder) else "No logs match this filter",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 11.sp,
-                            fontFamily = FontFamily.Monospace,
-                            lineHeight = 16.sp
-                        )
-                    }
-                } else {
-                    itemsIndexed(filteredLogLines) { index, line ->
-                        Text(
-                            text = line,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 11.sp,
-                            fontFamily = FontFamily.Monospace,
-                            lineHeight = 16.sp
-                        )
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    if (filteredLogLines.isEmpty()) {
+                        item {
+                            Text(
+                                text = if (logLines.isEmpty()) stringResource(R.string.logs_placeholder) else "No logs match this filter",
+                                color = Color.Gray,
+                                fontSize = 12.sp,
+                                fontFamily = FontFamily.Monospace,
+                                lineHeight = 18.sp
+                            )
+                        }
+                    } else {
+                        itemsIndexed(filteredLogLines) { index, line ->
+                            val textColor = when {
+                                line.contains("WARN", ignoreCase = true) -> Color(0xFFFFCC00)
+                                line.contains("ERROR", ignoreCase = true) || line.contains("FATAL", ignoreCase = true) -> Color(0xFFFF3333)
+                                line.contains("INFO", ignoreCase = true) -> Color(0xFF00FF66)
+                                else -> Color(0xFFE0E0E0)
+                            }
+                            Text(
+                                text = line,
+                                color = textColor,
+                                fontSize = 11.sp,
+                                fontFamily = FontFamily.Monospace,
+                                lineHeight = 16.sp
+                            )
+                        }
                     }
                 }
             }
-        }
         }
     }
 }
